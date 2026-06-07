@@ -1,4 +1,4 @@
-const APP_VERSION = "2026.06.07-supabase-redirect-github-pages";
+const APP_VERSION = "2026.06.07-supabase-dados-v3";
 
 const SUPABASE_CONFIG = {
   // A URL recebida foi a REST API. O supabase-js usa a URL base do projeto.
@@ -177,7 +177,7 @@ async function initSupabaseApp() {
     auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true },
   });
 
-  setDatabaseStatus(`Conectando ao Supabase em ${SUPABASE_CONFIG.restUrl}`);
+  setDatabaseStatus(`Conectando ao Supabase em ${SUPABASE_CONFIG.restUrl} • versão ${APP_VERSION}`);
 
   const { data, error } = await state.supabase.auth.getSession();
   if (error) showStatus(`Erro ao recuperar sessão: ${error.message}`);
@@ -390,8 +390,12 @@ async function loadRemoteData() {
   fillFilterOptions();
   renderAll();
   renderManagementTables();
-  setDatabaseStatus(`Conectado. ${limpezaRows.length} registros de limpeza e ${obrasRows.length} obras carregados do Supabase.`);
-  hideStatus();
+  setDatabaseStatus(`Conectado. ${limpezaRows.length} registros de limpeza e ${obrasRows.length} obras carregados do Supabase. • versão ${APP_VERSION}`);
+  if (!limpezaRows.length && !obrasRows.length) {
+    showStatus("Banco conectado, mas retornou 0 registros. Rode supabase/setup-completo-corrigido.sql no SQL Editor e depois aperte Ctrl + F5.");
+  } else {
+    hideStatus();
+  }
 
   if (isCoordenacao()) await Promise.all([loadAuditLogs({ silent: true }), loadProfiles({ silent: true })]);
 }
