@@ -1,212 +1,22 @@
--- Supabase schema + carga inicial gerada a partir de 1. UNIFILAR T2 DR (1).xlsx
--- Projeto: Trecho 2 | Dashboard PDM Infraestrutura
--- Gerado em: 2026-06-07T15:40:19
+-- Recarregar dados do Excel no Supabase
+-- Arquivo origem: 1. UNIFILAR T2 DR (1)(1).xlsx
+-- Use este arquivo quando as tabelas public.limpeza e public.obras já existem.
+-- Ele substitui os dados de limpeza e obras pelas informações do Excel.
 
-create extension if not exists pgcrypto;
+begin;
 
-do $$ begin
-  create type public.app_role as enum ('coordenacao', 'analista', 'fiscalizacao');
-exception
-  when duplicate_object then null;
+-- Evita poluir a auditoria com a carga inicial/recarregamento em massa.
+do $$
+begin
+  if exists (select 1 from pg_trigger where tgname = 'audit_limpeza_changes') then
+    execute 'alter table public.limpeza disable trigger audit_limpeza_changes';
+  end if;
+  if exists (select 1 from pg_trigger where tgname = 'audit_obras_changes') then
+    execute 'alter table public.obras disable trigger audit_obras_changes';
+  end if;
 end $$;
 
-create table if not exists public.profiles (
-  user_id uuid primary key references auth.users(id) on delete cascade,
-  nome text,
-  email text,
-  role public.app_role not null default 'fiscalizacao',
-  created_at timestamptz not null default now(),
-  updated_at timestamptz not null default now()
-);
-
-create table if not exists public.limpeza (
-  id uuid primary key default gen_random_uuid(),
-  excel_row integer,
-  equip_infra text not null unique,
-  atividade text,
-  kmi integer,
-  kmf integer,
-  kmi_real integer,
-  kmf_real integer,
-  ext numeric not null default 0,
-  ext_m text,
-  ext_real numeric not null default 0,
-  ext_real_m text,
-  percentual_real numeric not null default 0,
-  sb text,
-  sub text,
-  percentual_sub numeric not null default 0,
-  created_at timestamptz not null default now(),
-  updated_at timestamptz not null default now()
-);
-
-create table if not exists public.obras (
-  id uuid primary key default gen_random_uuid(),
-  seed_key text unique,
-  excel_row integer,
-  sub text,
-  sb text,
-  km integer,
-  descricao text not null,
-  tipo_obra text,
-  risco text,
-  motivo text,
-  equipamento text,
-  ext_eq numeric,
-  ext_eq_m text,
-  prazo_mes numeric,
-  dt_inicio date,
-  status text not null default 'NÃO INFORMADO',
-  progresso numeric not null default 0,
-  obs text,
-  created_at timestamptz not null default now(),
-  updated_at timestamptz not null default now()
-);
-
-create table if not exists public.audit_logs (
-  id bigserial primary key,
-  table_name text not null,
-  record_id text,
-  action text not null,
-  user_id uuid,
-  user_email text,
-  old_data jsonb,
-  new_data jsonb,
-  created_at timestamptz not null default now()
-);
-
-create or replace function public.touch_updated_at()
-returns trigger
-language plpgsql
-as $$
-begin
-  new.updated_at = now();
-  return new;
-end;
-$$;
-
-create or replace function public.handle_new_user()
-returns trigger
-language plpgsql
-security definer
-set search_path = public
-as $$
-begin
-  insert into public.profiles (user_id, nome, email, role)
-  values (new.id, coalesce(new.raw_user_meta_data->>'nome', new.email), new.email, 'fiscalizacao')
-  on conflict (user_id) do nothing;
-  return new;
-end;
-$$;
-
-drop trigger if exists on_auth_user_created on auth.users;
-create trigger on_auth_user_created
-  after insert on auth.users
-  for each row execute function public.handle_new_user();
-
-create or replace function public.current_app_role()
-returns public.app_role
-language sql
-stable
-security definer
-set search_path = public
-as $$
-  select role from public.profiles where user_id = auth.uid();
-$$;
-
-create or replace function public.is_coordenacao()
-returns boolean
-language sql
-stable
-security definer
-set search_path = public
-as $$
-  select coalesce(public.current_app_role() = 'coordenacao', false);
-$$;
-
-create or replace function public.can_write_pdm()
-returns boolean
-language sql
-stable
-security definer
-set search_path = public
-as $$
-  select coalesce(public.current_app_role() in ('coordenacao', 'analista'), false);
-$$;
-
-create or replace function public.audit_table_changes()
-returns trigger
-language plpgsql
-security definer
-set search_path = public
-as $$
-begin
-  insert into public.audit_logs (table_name, record_id, action, user_id, user_email, old_data, new_data)
-  values (
-    tg_table_name,
-    coalesce(new.id::text, old.id::text),
-    tg_op,
-    auth.uid(),
-    auth.jwt()->>'email',
-    case when tg_op in ('UPDATE', 'DELETE') then to_jsonb(old) else null end,
-    case when tg_op in ('INSERT', 'UPDATE') then to_jsonb(new) else null end
-  );
-
-  if tg_op = 'DELETE' then
-    return old;
-  end if;
-  return new;
-end;
-$$;
-
-alter table public.profiles enable row level security;
-alter table public.limpeza enable row level security;
-alter table public.obras enable row level security;
-alter table public.audit_logs enable row level security;
-
-drop policy if exists "profiles_select_authenticated" on public.profiles;
-drop policy if exists "profiles_select_self_or_coordenacao" on public.profiles;
-create policy "profiles_select_self_or_coordenacao" on public.profiles
-  for select to authenticated
-  using (user_id = auth.uid() or public.is_coordenacao());
-
-drop policy if exists "profiles_insert_self_fiscalizacao" on public.profiles;
-create policy "profiles_insert_self_fiscalizacao" on public.profiles
-  for insert to authenticated
-  with check (user_id = auth.uid() and role = 'fiscalizacao');
-
-drop policy if exists "profiles_update_only_coordenacao" on public.profiles;
-create policy "profiles_update_only_coordenacao" on public.profiles
-  for update to authenticated
-  using (public.is_coordenacao())
-  with check (public.is_coordenacao());
-
-drop policy if exists "limpeza_select_authenticated" on public.limpeza;
-create policy "limpeza_select_authenticated" on public.limpeza
-  for select to authenticated
-  using (true);
-
-drop policy if exists "limpeza_write_coord_analista" on public.limpeza;
-create policy "limpeza_write_coord_analista" on public.limpeza
-  for all to authenticated
-  using (public.can_write_pdm())
-  with check (public.can_write_pdm());
-
-drop policy if exists "obras_select_authenticated" on public.obras;
-create policy "obras_select_authenticated" on public.obras
-  for select to authenticated
-  using (true);
-
-drop policy if exists "obras_write_coord_analista" on public.obras;
-create policy "obras_write_coord_analista" on public.obras
-  for all to authenticated
-  using (public.can_write_pdm())
-  with check (public.can_write_pdm());
-
-drop policy if exists "audit_select_only_coordenacao" on public.audit_logs;
-create policy "audit_select_only_coordenacao" on public.audit_logs
-  for select to authenticated
-  using (public.is_coordenacao());
+truncate table public.limpeza, public.obras restart identity;
 
 -- Carga inicial: Limpeza Geral
 insert into public.limpeza (excel_row, equip_infra, atividade, kmi, kmf, kmi_real, kmf_real, ext, ext_m, ext_real, ext_real_m, percentual_real, sb, sub, percentual_sub) values
@@ -396,25 +206,20 @@ on conflict (seed_key) do update set
   obs = excluded.obs,
   updated_at = now();
 
-drop trigger if exists touch_profiles_updated_at on public.profiles;
-create trigger touch_profiles_updated_at before update on public.profiles
-  for each row execute function public.touch_updated_at();
+-- Reativa a auditoria para alterações feitas pelo site depois da carga.
+do $$
+begin
+  if exists (select 1 from pg_trigger where tgname = 'audit_limpeza_changes') then
+    execute 'alter table public.limpeza enable trigger audit_limpeza_changes';
+  end if;
+  if exists (select 1 from pg_trigger where tgname = 'audit_obras_changes') then
+    execute 'alter table public.obras enable trigger audit_obras_changes';
+  end if;
+end $$;
 
-drop trigger if exists touch_limpeza_updated_at on public.limpeza;
-create trigger touch_limpeza_updated_at before update on public.limpeza
-  for each row execute function public.touch_updated_at();
+commit;
 
-drop trigger if exists touch_obras_updated_at on public.obras;
-create trigger touch_obras_updated_at before update on public.obras
-  for each row execute function public.touch_updated_at();
-
-drop trigger if exists audit_limpeza_changes on public.limpeza;
-create trigger audit_limpeza_changes after insert or update or delete on public.limpeza
-  for each row execute function public.audit_table_changes();
-
-drop trigger if exists audit_obras_changes on public.obras;
-create trigger audit_obras_changes after insert or update or delete on public.obras
-  for each row execute function public.audit_table_changes();
-
--- Depois que o primeiro usuário entrar/cadastrar no site, rode uma vez no SQL Editor:
--- update public.profiles set role = 'coordenacao' where email = 'SEU_EMAIL_CORPORATIVO@empresa.com';
+-- Conferência rápida:
+select 'limpeza' as tabela, count(*) as registros from public.limpeza
+union all
+select 'obras' as tabela, count(*) as registros from public.obras;

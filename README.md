@@ -128,3 +128,42 @@ data/seed-preview.json
 - O usuário de Analista consegue manter dados, mas não vê auditoria.
 - O usuário de Coordenação consegue manter dados e visualizar auditoria.
 - Se quiser que Analista não possa adicionar registros, altere a política `can_write_pdm()` e esconda os botões de criação na aba Gestão.
+
+## Como carregar/recarregar os dados do Excel no Supabase
+
+O site não importa mais Excel pelo navegador. Agora o fluxo correto é:
+
+1. Transformar a planilha em SQL.
+2. Rodar o SQL no Supabase.
+3. O site lê as tabelas `public.limpeza` e `public.obras` automaticamente.
+
+Este pacote já contém os dados extraídos do arquivo `1. UNIFILAR T2 DR (1)(1).xlsx`.
+
+### Primeira instalação
+
+No Supabase, abra **SQL Editor** e rode:
+
+```text
+supabase/schema-and-seed.sql
+```
+
+Esse arquivo cria as tabelas, políticas, auditoria e também insere a carga inicial.
+
+### Banco já criado e você só quer trocar os dados do Excel
+
+No Supabase, abra **SQL Editor** e rode:
+
+```text
+supabase/recarregar-dados-excel.sql
+```
+
+Esse arquivo limpa apenas as tabelas `limpeza` e `obras`, carrega novamente os dados do Excel e preserva usuários/perfis.
+
+Ao final, ele deve retornar aproximadamente:
+
+```text
+limpeza | 133
+obras   | 15
+```
+
+Depois disso, basta atualizar a página do site e entrar novamente.

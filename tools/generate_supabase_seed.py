@@ -8,9 +8,9 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any
 
-XLSX_PATH = Path('/mnt/data/1. UNIFILAR T2 DR (1).xlsx')
-OUT_SQL = Path('/mnt/data/work/Coord-Infra-Trecho-2-main/supabase/schema-and-seed.sql')
-OUT_JSON = Path('/mnt/data/work/Coord-Infra-Trecho-2-main/data/seed-preview.json')
+XLSX_PATH = Path('/mnt/data/1. UNIFILAR T2 DR (1)(1).xlsx')
+OUT_SQL = Path('/mnt/data/supabase_excel_update/supabase/schema-and-seed.sql')
+OUT_JSON = Path('/mnt/data/supabase_excel_update/data/seed-preview.json')
 
 NS_MAIN = '{http://schemas.openxmlformats.org/spreadsheetml/2006/main}'
 NS_REL = '{http://schemas.openxmlformats.org/officeDocument/2006/relationships}'
