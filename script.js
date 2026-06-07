@@ -1,4 +1,4 @@
-const APP_VERSION = "2026.06.07-supabase-dados-v3";
+const APP_VERSION = "2026.06.07-supabase-menu-v4";
 
 const SUPABASE_CONFIG = {
   // A URL recebida foi a REST API. O supabase-js usa a URL base do projeto.
@@ -61,6 +61,7 @@ const state = {
 
 document.addEventListener("DOMContentLoaded", () => {
   initTheme();
+  bindMenuActions();
   bindNavigation();
   bindFilters();
   bindAuthActions();
@@ -88,19 +89,51 @@ function updateThemeButton() {
   document.getElementById("themeToggleText").textContent = isDark ? "Tema claro" : "Tema escuro";
 }
 
+function bindMenuActions() {
+  const toggle = document.getElementById("menuToggle");
+  const close = document.getElementById("menuCloseBtn");
+  const backdrop = document.getElementById("menuBackdrop");
+
+  if (toggle) toggle.addEventListener("click", () => toggleSideMenu());
+  if (close) close.addEventListener("click", () => toggleSideMenu(false));
+  if (backdrop) backdrop.addEventListener("click", () => toggleSideMenu(false));
+
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") toggleSideMenu(false);
+  });
+}
+
+function toggleSideMenu(force) {
+  const menu = document.getElementById("sideMenu");
+  const backdrop = document.getElementById("menuBackdrop");
+  const toggle = document.getElementById("menuToggle");
+  if (!menu || !backdrop || !toggle) return;
+
+  const shouldOpen = typeof force === "boolean" ? force : !menu.classList.contains("open");
+  menu.classList.toggle("open", shouldOpen);
+  backdrop.classList.toggle("open", shouldOpen);
+  document.body.classList.toggle("menu-open", shouldOpen);
+  menu.setAttribute("aria-hidden", String(!shouldOpen));
+  toggle.setAttribute("aria-expanded", String(shouldOpen));
+}
+
 function bindNavigation() {
   document.querySelectorAll(".tab").forEach((button) => {
-    button.addEventListener("click", () => activatePanel(button.dataset.panel));
+    button.addEventListener("click", () => {
+      activatePanel(button.dataset.panel);
+      toggleSideMenu(false);
+    });
   });
 }
 
 function activatePanel(panel) {
   const targetTab = document.querySelector(`.tab[data-panel="${panel}"]`);
-  if (!targetTab || targetTab.hidden) return;
+  const targetPanel = document.getElementById(`panel-${panel}`);
+  if (!targetTab || targetTab.hidden || !targetPanel || targetPanel.hidden) return;
 
   document.querySelectorAll(".tab").forEach((tab) => tab.classList.toggle("active", tab === targetTab));
   document.querySelectorAll(".panel").forEach((section) => {
-    section.classList.toggle("active", section.id === `panel-${panel}`);
+    section.classList.toggle("active", section === targetPanel);
   });
 }
 
@@ -454,13 +487,16 @@ function applyPermissions() {
 
   document.querySelectorAll("[data-requires-write]").forEach((el) => { el.hidden = !write; });
   document.querySelectorAll("[data-requires-coordenacao]").forEach((el) => { el.hidden = !coord; });
+  document.querySelectorAll("[data-panel-requires-write]").forEach((el) => { el.hidden = !write; });
+  document.querySelectorAll("[data-panel-requires-coordenacao]").forEach((el) => { el.hidden = !coord; });
 
   document.querySelectorAll("#panel-gestao input, #panel-gestao select, #panel-gestao button").forEach((el) => {
     el.disabled = !write;
   });
 
   const activeTab = document.querySelector(".tab.active");
-  if (activeTab?.hidden) activatePanel("overview");
+  const activePanel = document.querySelector(".panel.active");
+  if (activeTab?.hidden || activePanel?.hidden) activatePanel("overview");
 
   renderAll();
   renderManagementTables();
@@ -779,7 +815,7 @@ function fillSelect(id, options, firstLabel) {
 
 async function saveLimpeza(event) {
   event.preventDefault();
-  if (!canWrite()) return showStatus("Seu perfil não permite alterar dados.");
+  if (!canWrite()) return showStatus("Ação não disponível.");
 
   const id = document.getElementById("limpezaId").value;
   const ext = getNumberInput("limpezaExt") || 0;
@@ -816,7 +852,7 @@ async function saveLimpeza(event) {
 
 async function saveObra(event) {
   event.preventDefault();
-  if (!canWrite()) return showStatus("Seu perfil não permite alterar dados.");
+  if (!canWrite()) return showStatus("Ação não disponível.");
 
   const id = document.getElementById("obraId").value;
   const extEq = getNumberInput("obraExtEq");
@@ -894,7 +930,7 @@ function editObra(id) {
 }
 
 async function deleteLimpeza(id) {
-  if (!canWrite()) return showStatus("Seu perfil não permite excluir dados.");
+  if (!canWrite()) return showStatus("Ação não disponível.");
   const row = state.limpeza.rows.find((item) => String(item.id) === String(id));
   if (!confirm(`Excluir o registro de limpeza ${row?.equipInfra || "selecionado"}?`)) return;
   const { error } = await state.supabase.from(TABLES.limpeza).delete().eq("id", id);
@@ -905,7 +941,7 @@ async function deleteLimpeza(id) {
 }
 
 async function deleteObra(id) {
-  if (!canWrite()) return showStatus("Seu perfil não permite excluir dados.");
+  if (!canWrite()) return showStatus("Ação não disponível.");
   const row = state.obras.rows.find((item) => String(item.id) === String(id));
   if (!confirm(`Excluir a obra ${row?.descricao || "selecionada"}?`)) return;
   const { error } = await state.supabase.from(TABLES.obras).delete().eq("id", id);
@@ -1019,7 +1055,7 @@ async function loadProfiles(options = {}) {
 }
 
 async function updateUserRole(userId, role) {
-  if (!isCoordenacao()) return showStatus("Somente Coordenação pode alterar perfis.");
+  if (!isCoordenacao()) return showStatus("Ação não disponível.");
   if (!userId || !ROLE_LABELS[role]) return showStatus("Perfil inválido.");
 
   const { error } = await state.supabase
@@ -1048,7 +1084,7 @@ function renderProfilesTable() {
   if (!table) return;
 
   if (!isCoordenacao()) {
-    table.innerHTML = `<tbody><tr><td>A gestão de perfis é exclusiva do perfil Coordenação.</td></tr></tbody>`;
+    table.innerHTML = "";
     return;
   }
 
@@ -1076,7 +1112,7 @@ function renderAuditLogs() {
   if (!table) return;
 
   if (!isCoordenacao()) {
-    table.innerHTML = `<tbody><tr><td>A auditoria é exclusiva do perfil Coordenação.</td></tr></tbody>`;
+    table.innerHTML = "";
     return;
   }
 

@@ -4,8 +4,8 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Trecho 2 | Dashboard PDM Infraestrutura</title>
-  <meta name="description" content="Dashboard PDM Trecho 2 com Supabase, perfis de acesso, CRUD e auditoria." />
-  <link rel="stylesheet" href="styles.css?v=supabase-20260607-dados-v3" />
+  <meta name="description" content="Dashboard PDM Trecho 2 com dados integrados ao Supabase." />
+  <link rel="stylesheet" href="styles.css?v=supabase-20260607-menu-v4" />
 </head>
 <body>
   <header class="site-header">
@@ -15,14 +15,10 @@
       <span class="brand-subtitle">Trecho 2 • PDM Infraestrutura</span>
     </div>
 
-    <nav class="tabs" aria-label="Navegação do dashboard">
-      <button class="tab active" type="button" data-panel="overview">Visão geral</button>
-      <button class="tab" type="button" data-panel="limpeza">Limpeza Geral</button>
-      <button class="tab" type="button" data-panel="obras">Obras</button>
-      <button class="tab" type="button" data-panel="gestao" data-requires-write>Gestão</button>
-      <button class="tab" type="button" data-panel="auditoria" data-requires-coordenacao>Auditoria</button>
-      <button class="tab" type="button" data-panel="dados">Banco de dados</button>
-    </nav>
+    <button class="menu-toggle" id="menuToggle" type="button" aria-controls="sideMenu" aria-expanded="false">
+      <span aria-hidden="true">☰</span>
+      <span>Menu</span>
+    </button>
 
     <div class="header-actions">
       <div class="update-pill" title="Data da última atualização carregada">
@@ -42,13 +38,33 @@
     </div>
   </header>
 
+  <div class="menu-backdrop" id="menuBackdrop" aria-hidden="true"></div>
+  <aside class="side-menu" id="sideMenu" aria-label="Menu de páginas" aria-hidden="true">
+    <div class="side-menu-head">
+      <div>
+        <span class="eyebrow">Navegação</span>
+        <strong>Menu</strong>
+      </div>
+      <button class="ghost-btn tiny-btn" id="menuCloseBtn" type="button" aria-label="Fechar menu">Fechar</button>
+    </div>
+
+    <nav class="tabs side-menu-nav" aria-label="Páginas do dashboard">
+      <button class="tab active" type="button" data-panel="overview">Visão geral</button>
+      <button class="tab" type="button" data-panel="limpeza">Limpeza Geral</button>
+      <button class="tab" type="button" data-panel="obras">Obras</button>
+      <button class="tab" type="button" data-panel="gestao" data-requires-write hidden>Gestão</button>
+      <button class="tab" type="button" data-panel="auditoria" data-requires-coordenacao hidden>Auditoria</button>
+      <button class="tab" type="button" data-panel="dados" data-requires-coordenacao hidden>Banco de dados</button>
+    </nav>
+  </aside>
+
   <main>
     <section class="status-message" id="statusMessage" role="status" aria-live="polite"></section>
 
     <section class="surface-card auth-card" id="authPanel">
       <div>
         <span class="eyebrow">Acesso com Supabase</span>
-        <h2>Entre para visualizar ou gerenciar o PDM</h2>
+        <h2>Entre para acessar o PDM</h2>
         <p class="muted">
           Os dados agora vêm do banco Supabase. Para o primeiro acesso, preencha e-mail e senha e clique em <strong>Criar acesso</strong>. Depois confirme o e-mail, se o Supabase solicitar, e então use <strong>Entrar</strong>.
         </p>
@@ -164,7 +180,7 @@
       <div class="cards-grid obras-grid" id="obrasCards"></div>
     </section>
 
-    <section class="panel" id="panel-gestao">
+    <section class="panel" id="panel-gestao" data-panel-requires-write hidden>
       <div class="section-heading">
         <div>
           <span class="eyebrow">Manutenção de dados</span>
@@ -246,7 +262,7 @@
       </div>
     </section>
 
-    <section class="panel" id="panel-auditoria">
+    <section class="panel" id="panel-auditoria" data-panel-requires-coordenacao hidden>
       <div class="section-heading">
         <div>
           <span class="eyebrow">Coordenação</span>
@@ -280,7 +296,7 @@
       </div>
     </section>
 
-    <section class="panel" id="panel-dados">
+    <section class="panel" id="panel-dados" data-panel-requires-coordenacao hidden>
       <div class="section-heading">
         <div>
           <span class="eyebrow">Fonte de dados</span>
@@ -296,21 +312,8 @@
         <p class="muted" id="databaseStatus">Verificando conexão...</p>
 
         <div class="hint-box">
-          <strong>Perfis configurados</strong>
-          <p><strong>Coordenação:</strong> adiciona, edita, exclui e acessa auditoria. <strong>Analista:</strong> adiciona, edita e exclui dados. <strong>Fiscalização:</strong> apenas visualiza.</p>
-        </div>
-
-        <div class="table-wrap">
-          <table>
-            <thead>
-              <tr><th>Perfil</th><th>Visualiza</th><th>Adiciona</th><th>Edita</th><th>Exclui</th><th>Auditoria</th></tr>
-            </thead>
-            <tbody>
-              <tr><td>Coordenação</td><td>Sim</td><td>Sim</td><td>Sim</td><td>Sim</td><td>Sim</td></tr>
-              <tr><td>Analista</td><td>Sim</td><td>Sim</td><td>Sim</td><td>Sim</td><td>Não</td></tr>
-              <tr><td>Fiscalização</td><td>Sim</td><td>Não</td><td>Não</td><td>Não</td><td>Não</td></tr>
-            </tbody>
-          </table>
+          <strong>Dados ativos</strong>
+          <p>As informações exibidas no dashboard são consultadas diretamente nas tabelas do Supabase.</p>
         </div>
       </div>
     </section>
@@ -324,6 +327,6 @@
   </footer>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="script.js?v=supabase-20260607-dados-v3"></script>
+  <script src="script.js?v=supabase-20260607-menu-v4"></script>
 </body>
 </html>
