@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Trecho 2 | Dashboard PDM Infraestrutura</title>
+  <meta name="description" content="Dashboard PDM Trecho 2 para acompanhamento de limpeza de lastro e obras de infraestrutura ferroviária." />
+  <link rel="stylesheet" href="styles.css?v=20260519-2" />
+</head>
+<body>
+  <header class="site-header">
+    <div class="brand">
+      <div class="brand-mark" aria-hidden="true">r</div>
+      <div>
+        <strong class="brand-name">rumo</strong>
+        <span class="brand-subtitle">Trecho 2 • PDM Infraestrutura</span>
+      </div>
+    </div>
+
+    <nav class="tabs" aria-label="Navegação do dashboard">
+      <button class="tab active" type="button" data-panel="overview">Visão geral</button>
+      <button class="tab" type="button" data-panel="limpeza">Limpeza Geral</button>
+      <button class="tab" type="button" data-panel="obras">Obras</button>
+      <button class="tab" type="button" data-panel="dados">Fonte de dados</button>
+    </nav>
+
+    <div class="header-actions">
+      <div class="update-pill" title="Data da última atualização carregada">
+        <span>Atualizado</span>
+        <strong id="lastUpdateLabel">—</strong>
+      </div>
+
+      <button class="theme-toggle" id="themeToggle" type="button" aria-label="Alternar entre tema claro e escuro">
+        <span class="theme-dot" aria-hidden="true"></span>
+        <span id="themeToggleText">Tema escuro</span>
+      </button>
+    </div>
+  </header>
+
+  <main>
+
+    <section class="status-message" id="statusMessage" role="status" aria-live="polite"></section>
+
+    <section class="panel active" id="panel-overview">
+      <div class="section-heading">
+        <div>
+          <span class="eyebrow">Resumo executivo</span>
+          <h2>Visão geral do PDM</h2>
+        </div>
+      </div>
+
+      <div class="kpi-grid" id="overviewKpis"></div>
+
+      <div class="split-grid">
+        <article class="surface-card">
+          <div class="card-head">
+            <div>
+              <span class="eyebrow">Limpeza Geral</span>
+              <h3>Evolução por SUB</h3>
+            </div>
+          </div>
+          <div id="overviewSubList" class="compact-list"></div>
+        </article>
+
+        <article class="surface-card">
+          <div class="card-head">
+            <div>
+              <span class="eyebrow">Obras</span>
+              <h3>Status das Obras</h3>
+            </div>
+          </div>
+          <div id="overviewObrasList" class="compact-list"></div>
+        </article>
+      </div>
+    </section>
+
+    <section class="panel" id="panel-limpeza">
+      <div class="section-heading">
+        <div>
+          <span class="eyebrow">ZBV-ZAR PDM Limpeza</span>
+          <h2>Limpeza Geral por SUB</h2>
+        </div>
+      </div>
+
+      <div class="toolbar">
+        <label>
+          SUB
+          <select id="limpezaSubFilter">
+            <option value="">Todas</option>
+          </select>
+        </label>
+        <label class="grow">
+          Buscar
+          <input type="search" id="limpezaSearch" placeholder="Buscar equipamento ou atividade..." />
+        </label>
+      </div>
+
+      <div class="cards-grid" id="limpezaCards"></div>
+    </section>
+
+    <section class="panel" id="panel-obras">
+      <div class="section-heading">
+        <div>
+          <span class="eyebrow">ZBV-ZAR Obras</span>
+          <h2>Dashboard de obras</h2>
+        </div>
+      </div>
+
+      <div class="toolbar">
+        <label>
+          SUB
+          <select id="obrasSubFilter">
+            <option value="">Todas</option>
+          </select>
+        </label>
+        <label>
+          Status
+          <select id="obrasStatusFilter">
+            <option value="">Todos</option>
+          </select>
+        </label>
+        <label>
+          Risco Matriz
+          <select id="obrasRiscoFilter">
+            <option value="">Todos</option>
+          </select>
+        </label>
+        <label class="grow">
+          Buscar
+          <input type="search" id="obrasSearch" placeholder="Buscar descrição, equipamento, motivo ou SB..." />
+        </label>
+      </div>
+
+      <div class="cards-grid obras-grid" id="obrasCards"></div>
+    </section>
+
+    <section class="panel" id="panel-dados">
+      <div class="section-heading">
+        <div>
+          <span class="eyebrow">Dashboard local</span>
+          <h2>Fonte de dados: importar planilha PDM</h2>
+          <p>
+            Importe a planilha PDM atualizada diretamente do computador. O dashboard lê as abas da planilha no próprio navegador,
+            sem publicar arquivo, sem link online e sem enviar dados para servidor.
+          </p>
+        </div>
+      </div>
+
+      <div class="surface-card data-card">
+        <h3>Importar planilha local</h3>
+        <p class="muted">
+          Use a mesma estrutura da planilha atual, com as abas <strong>ZBV-ZAR PDM Limpeza DR</strong> e
+          <strong>ZBV-ZAR Obras DR</strong>. O sistema também aceita os nomes sem “DR”.
+        </p>
+
+        <div class="source-form">
+          <label>
+            Planilha PDM atualizada (.xlsx ou .xlsm)
+            <input id="pdmFileInput" type="file" accept=".xlsx,.xlsm" />
+          </label>
+
+          <div class="source-actions">
+            <button class="primary-btn" id="importWorkbookBtn" type="button">Importar planilha</button>
+            <button class="ghost-btn" id="clearDataBtn" type="button">Limpar dados carregados</button>
+          </div>
+        </div>
+
+        <div class="loaded-file" id="loadedFileInfo">Nenhuma planilha local carregada. Dashboard zerado.</div>
+
+        <div class="hint-box">
+          <strong>Fluxo recomendado</strong>
+          <p>
+            A planilha real continua protegida no ambiente corporativo. Quando precisar consultar o dashboard, baixe uma cópia autorizada,
+            abra o site e importe o arquivo localmente. Nada precisa ser hospedado no GitHub além do código do site.
+          </p>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="footer-tiles" aria-hidden="true">
+      <span></span><span></span><span></span><span></span><span></span><span></span>
+    </div>
+    <p>Trecho 2 • Infraestrutura ferroviária • Dashboard PDM</p>
+  </footer>
+
+  <script src="script.js?v=20260519-2"></script>
+</body>
+</html>

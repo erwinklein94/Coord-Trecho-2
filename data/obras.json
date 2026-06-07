@@ -1,0 +1,83 @@
+{
+  "versao": "1.0.0",
+  "trecho": "Trecho 2",
+  "area": "Infraestrutura ferroviária",
+  "atualizadoEm": "2026-05-19",
+  "obras": [
+    {
+      "id": "OBR-001",
+      "nome": "Implantação de canaletas - KM 101+200 ao 101+900",
+      "frente": "Drenagem",
+      "tipo": "Canaleta / escoamento superficial",
+      "kmInicio": "101+200",
+      "kmFim": "101+900",
+      "metaMetros": 700,
+      "executadoMetros": 280,
+      "responsavel": "Fiscal 1",
+      "status": "Em andamento",
+      "ultimaAtualizacao": "2026-05-19",
+      "observacoes": "Obra exemplo para começar o dashboard. Altere conforme o PDM real.",
+      "apontamentosAplicados": []
+    },
+    {
+      "id": "OBR-002",
+      "nome": "Correção e proteção de talude - KM 108+300 ao 108+700",
+      "frente": "Terraplenagem",
+      "tipo": "Talude / contenção / drenagem provisória",
+      "kmInicio": "108+300",
+      "kmFim": "108+700",
+      "metaMetros": 400,
+      "executadoMetros": 80,
+      "responsavel": "Fiscal 2",
+      "status": "Atenção",
+      "ultimaAtualizacao": "2026-05-19",
+      "observacoes": "Acompanhar condição de drenagem e estabilidade após chuva.",
+      "apontamentosAplicados": []
+    },
+    {
+      "id": "OBR-003",
+      "nome": "Recomposição de lastro e sublastro - KM 112+000 ao 112+600",
+      "frente": "Plataforma ferroviária",
+      "tipo": "Lastro / sublastro",
+      "kmInicio": "112+000",
+      "kmFim": "112+600",
+      "metaMetros": 600,
+      "executadoMetros": 510,
+      "responsavel": "Fiscal 3",
+      "status": "Em andamento",
+      "ultimaAtualizacao": "2026-05-19",
+      "observacoes": "Frente próxima de conclusão.",
+      "apontamentosAplicados": []
+    },
+    {
+      "id": "OBR-004",
+      "nome": "Limpeza e recuperação de bueiros - KM 116+100 ao 116+850",
+      "frente": "Drenagem profunda",
+      "tipo": "Bueiro / desobstrução / recomposição",
+      "kmInicio": "116+100",
+      "kmFim": "116+850",
+      "metaMetros": 750,
+      "executadoMetros": 0,
+      "responsavel": "A definir",
+      "status": "Planejada",
+      "ultimaAtualizacao": "2026-05-19",
+      "observacoes": "Obra planejada para início de acompanhamento.",
+      "apontamentosAplicados": []
+    },
+    {
+      "id": "OBR-005",
+      "nome": "Regularização de plataforma e sarjetas - KM 121+400 ao 122+000",
+      "frente": "Plataforma / drenagem superficial",
+      "tipo": "Sargeta / canaleta / regularização",
+      "kmInicio": "121+400",
+      "kmFim": "122+000",
+      "metaMetros": 600,
+      "executadoMetros": 600,
+      "responsavel": "Fiscal 4",
+      "status": "Concluída",
+      "ultimaAtualizacao": "2026-05-19",
+      "observacoes": "Modelo de obra concluída.",
+      "apontamentosAplicados": []
+    }
+  ]
+}

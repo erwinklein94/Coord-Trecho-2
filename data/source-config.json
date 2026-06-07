@@ -1,0 +1,4 @@
+{
+  "modo": "dashboard-local",
+  "observacao": "O dashboard inicia zerado. Os dados reais aparecem apenas quando o usuário importa uma planilha PDM local no navegador."
+}
