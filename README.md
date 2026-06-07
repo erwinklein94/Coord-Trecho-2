@@ -39,14 +39,7 @@ Esse script cria:
 - gatilhos de auditoria
 - carga inicial com 133 registros de limpeza e 15 obras da planilha anexada
 
-4. No Supabase, vá em **Project Settings > API** e copie a chave **anon/public**.
-5. Abra `script.js` e substitua:
-
-```js
-anonKey: "COLE_AQUI_A_SUPABASE_ANON_KEY"
-```
-
-pela chave anon/public do projeto.
+4. A chave **anon/public** já está configurada em `script.js`.
 
 > A URL do projeto já está configurada como `https://nvfewxgtjenyawxyroqk.supabase.co`.
 

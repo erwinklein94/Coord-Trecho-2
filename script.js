@@ -4,9 +4,9 @@ const SUPABASE_CONFIG = {
   // A URL recebida foi a REST API. O supabase-js usa a URL base do projeto.
   url: "https://nvfewxgtjenyawxyroqk.supabase.co",
   restUrl: "https://nvfewxgtjenyawxyroqk.supabase.co/rest/v1/",
-  // Cole aqui a anon/public key do Supabase antes de publicar.
+  // Chave anon/public configurada para uso no frontend.
   // Esta chave é pública por natureza; a segurança fica nas políticas RLS do arquivo supabase/schema-and-seed.sql.
-  anonKey: "COLE_AQUI_A_SUPABASE_ANON_KEY",
+  anonKey: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im52ZmV3eGd0amVueWF3eHlyb3FrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA4MDgyMDIsImV4cCI6MjA5NjM4NDIwMn0.w5vSwqUWrw5I-0qdOE24JOGyU_-k23GWX4M9kAPWTDE",
 };
 
 const STORAGE_KEYS = {
