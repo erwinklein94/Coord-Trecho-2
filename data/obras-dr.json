@@ -1,7 +1,4 @@
 {
-  "title": "ZBV-ZAR Obras",
-  "sourceSheet": "",
-  "sourceFile": "",
-  "generatedAt": null,
-  "rows": []
+  "deprecated": true,
+  "observacao": "Arquivo mantido apenas por compatibilidade. O site agora usa Supabase: tabela public.obras."
 }

@@ -1,8 +1,4 @@
 {
-  "title": "ZBV-ZAR PDM Limpeza",
-  "sourceSheet": "",
-  "sourceFile": "",
-  "generatedAt": null,
-  "rows": [],
-  "subSummary": []
+  "deprecated": true,
+  "observacao": "Arquivo mantido apenas por compatibilidade. O site agora usa Supabase: tabela public.limpeza."
 }

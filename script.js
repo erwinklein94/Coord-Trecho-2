@@ -1,27 +1,53 @@
-const APP_VERSION = "2026.05.19-2";
+const APP_VERSION = "2026.06.07-supabase";
+
+const SUPABASE_CONFIG = {
+  // A URL recebida foi a REST API. O supabase-js usa a URL base do projeto.
+  url: "https://nvfewxgtjenyawxyroqk.supabase.co",
+  restUrl: "https://nvfewxgtjenyawxyroqk.supabase.co/rest/v1/",
+  // Cole aqui a anon/public key do Supabase antes de publicar.
+  // Esta chave é pública por natureza; a segurança fica nas políticas RLS do arquivo supabase/schema-and-seed.sql.
+  anonKey: "COLE_AQUI_A_SUPABASE_ANON_KEY",
+};
 
 const STORAGE_KEYS = {
   theme: "trecho2-pdm-theme",
 };
 
-const TARGET_SHEETS = {
-  limpeza: ["ZBV-ZAR PDM Limpeza DR", "ZBV-ZAR PDM Limpeza", "PDM Limpeza"],
-  obras: ["ZBV-ZAR Obras DR", "ZBV-ZAR Obras", "Obras DR", "Obras"],
+const TABLES = {
+  limpeza: "limpeza",
+  obras: "obras",
+  profiles: "profiles",
+  audit: "audit_logs",
+};
+
+const ROLE_LABELS = {
+  coordenacao: "Coordenação",
+  analista: "Analista",
+  fiscalizacao: "Fiscalização",
 };
 
 const state = {
-  limpeza: { rows: [], subSummary: [], generatedAt: null, sourceSheet: "" },
-  obras: { rows: [], generatedAt: null, sourceSheet: "" },
-  sourceLabel: "Nenhuma planilha carregada",
+  supabase: null,
+  session: null,
+  user: null,
+  profile: null,
+  limpeza: { rows: [], subSummary: [], generatedAt: null, sourceSheet: "Supabase" },
+  obras: { rows: [], generatedAt: null, sourceSheet: "Supabase" },
+  auditLogs: [],
+  profiles: [],
+  sourceLabel: "Supabase",
   loadErrors: [],
+  isConfigured: false,
 };
 
 document.addEventListener("DOMContentLoaded", () => {
   initTheme();
   bindNavigation();
   bindFilters();
-  bindSourceActions();
-  resetToEmptyData({ silent: true });
+  bindAuthActions();
+  bindManagementActions();
+  bindDelegatedActions();
+  initSupabaseApp();
 });
 
 function initTheme() {
@@ -45,13 +71,17 @@ function updateThemeButton() {
 
 function bindNavigation() {
   document.querySelectorAll(".tab").forEach((button) => {
-    button.addEventListener("click", () => {
-      const panel = button.dataset.panel;
-      document.querySelectorAll(".tab").forEach((tab) => tab.classList.toggle("active", tab === button));
-      document.querySelectorAll(".panel").forEach((section) => {
-        section.classList.toggle("active", section.id === `panel-${panel}`);
-      });
-    });
+    button.addEventListener("click", () => activatePanel(button.dataset.panel));
+  });
+}
+
+function activatePanel(panel) {
+  const targetTab = document.querySelector(`.tab[data-panel="${panel}"]`);
+  if (!targetTab || targetTab.hidden) return;
+
+  document.querySelectorAll(".tab").forEach((tab) => tab.classList.toggle("active", tab === targetTab));
+  document.querySelectorAll(".panel").forEach((section) => {
+    section.classList.toggle("active", section.id === `panel-${panel}`);
   });
 }
 
@@ -65,32 +95,251 @@ function bindFilters() {
   });
 }
 
-function bindSourceActions() {
-  const fileInput = document.getElementById("pdmFileInput");
-  const importButton = document.getElementById("importWorkbookBtn");
-  const clearButton = document.getElementById("clearDataBtn");
-
-  if (!fileInput || !importButton || !clearButton) return;
-
-  importButton.addEventListener("click", importSelectedWorkbook);
-  fileInput.addEventListener("change", () => {
-    if (fileInput.files && fileInput.files.length) {
-      setLoadedFileInfo(`Arquivo selecionado: ${fileInput.files[0].name}. Importando...`);
-      importSelectedWorkbook();
-    }
+function bindAuthActions() {
+  document.getElementById("authForm").addEventListener("submit", async (event) => {
+    event.preventDefault();
+    await signIn();
   });
 
-  clearButton.addEventListener("click", () => {
-    fileInput.value = "";
+  document.getElementById("signUpBtn").addEventListener("click", signUp);
+  document.getElementById("signOutBtn").addEventListener("click", signOut);
+}
+
+function bindManagementActions() {
+  document.getElementById("limpezaForm").addEventListener("submit", saveLimpeza);
+  document.getElementById("obraForm").addEventListener("submit", saveObra);
+  document.getElementById("cancelLimpezaEditBtn").addEventListener("click", resetLimpezaForm);
+  document.getElementById("cancelObraEditBtn").addEventListener("click", resetObraForm);
+  document.getElementById("refreshAuditBtn").addEventListener("click", loadAuditLogs);
+  document.getElementById("refreshProfilesBtn").addEventListener("click", loadProfiles);
+}
+
+function bindDelegatedActions() {
+  document.body.addEventListener("click", async (event) => {
+    const button = event.target.closest("button[data-action]");
+    if (!button) return;
+
+    const id = button.dataset.id;
+    const action = button.dataset.action;
+
+    if (action === "edit-limpeza") return editLimpeza(id);
+    if (action === "delete-limpeza") return deleteLimpeza(id);
+    if (action === "edit-obra") return editObra(id);
+    if (action === "delete-obra") return deleteObra(id);
+  });
+
+  document.body.addEventListener("change", async (event) => {
+    const select = event.target.closest('select[data-action="change-role"]');
+    if (!select) return;
+    await updateUserRole(select.dataset.userId, select.value);
+  });
+}
+
+async function initSupabaseApp() {
+  state.isConfigured = isSupabaseConfigured();
+
+  if (!state.isConfigured) {
+    setDatabaseStatus("Supabase ainda não configurado: cole a anon/public key em script.js antes de publicar.");
+    showStatus("Banco Supabase preparado no código, mas falta preencher a anon/public key no arquivo script.js.");
     resetToEmptyData();
+    applyPermissions();
+    return;
+  }
+
+  if (!window.supabase?.createClient) {
+    setDatabaseStatus("Não foi possível carregar o SDK do Supabase. Verifique a conexão com a internet ou o bloqueio do CDN.");
+    showStatus("SDK do Supabase não carregou. O site precisa do supabase-js para autenticar e consultar o banco.");
+    resetToEmptyData();
+    applyPermissions();
+    return;
+  }
+
+  state.supabase = window.supabase.createClient(SUPABASE_CONFIG.url, SUPABASE_CONFIG.anonKey, {
+    auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true },
   });
+
+  setDatabaseStatus(`Conectando ao Supabase em ${SUPABASE_CONFIG.restUrl}`);
+
+  const { data, error } = await state.supabase.auth.getSession();
+  if (error) showStatus(`Erro ao recuperar sessão: ${error.message}`);
+
+  state.session = data?.session || null;
+  state.user = state.session?.user || null;
+
+  state.supabase.auth.onAuthStateChange(async (_event, session) => {
+    state.session = session;
+    state.user = session?.user || null;
+    await refreshAfterAuthChange();
+  });
+
+  await refreshAfterAuthChange();
+}
+
+function isSupabaseConfigured() {
+  return Boolean(
+    SUPABASE_CONFIG.url &&
+    SUPABASE_CONFIG.anonKey &&
+    !SUPABASE_CONFIG.anonKey.includes("COLE_AQUI") &&
+    SUPABASE_CONFIG.anonKey.length > 40
+  );
+}
+
+async function refreshAfterAuthChange() {
+  updateAuthUi();
+
+  if (!state.user) {
+    state.profile = null;
+    setDatabaseStatus("Entre com e-mail e senha para carregar os dados do Supabase.");
+    resetToEmptyData();
+    applyPermissions();
+    return;
+  }
+
+  await loadProfile();
+  applyPermissions();
+  await loadRemoteData();
+}
+
+async function signIn() {
+  if (!requireSupabaseReady()) return;
+
+  const email = document.getElementById("authEmail").value.trim();
+  const password = document.getElementById("authPassword").value;
+  if (!email || !password) return showStatus("Informe e-mail e senha.");
+
+  showStatus("Entrando no Supabase...");
+  const { error } = await state.supabase.auth.signInWithPassword({ email, password });
+  if (error) return showStatus(`Não foi possível entrar: ${error.message}`);
+  showStatus("Login realizado com sucesso.");
+  setTimeout(hideStatus, 2500);
+}
+
+async function signUp() {
+  if (!requireSupabaseReady()) return;
+
+  const email = document.getElementById("authEmail").value.trim();
+  const password = document.getElementById("authPassword").value;
+  if (!email || !password) return showStatus("Informe e-mail e senha para criar o acesso.");
+
+  showStatus("Criando acesso no Supabase...");
+  const { error } = await state.supabase.auth.signUp({
+    email,
+    password,
+    options: { data: { nome: email } },
+  });
+
+  if (error) return showStatus(`Não foi possível criar acesso: ${error.message}`);
+  showStatus("Acesso criado. Se a confirmação por e-mail estiver ativa no Supabase, confirme o e-mail antes de entrar.");
+}
+
+async function signOut() {
+  if (!requireSupabaseReady()) return;
+  await state.supabase.auth.signOut();
+  showStatus("Sessão encerrada.");
+  setTimeout(hideStatus, 2500);
+}
+
+function requireSupabaseReady() {
+  if (!state.isConfigured || !state.supabase) {
+    showStatus("Configure a anon/public key do Supabase em script.js para usar login e banco de dados.");
+    return false;
+  }
+  return true;
+}
+
+async function loadProfile() {
+  if (!state.user) return;
+
+  const { data, error } = await state.supabase
+    .from(TABLES.profiles)
+    .select("user_id,nome,email,role,created_at,updated_at")
+    .eq("user_id", state.user.id)
+    .maybeSingle();
+
+  if (error) {
+    setDatabaseStatus(`Erro ao carregar perfil: ${error.message}. Rode supabase/schema-and-seed.sql no SQL Editor.`);
+    showStatus(`Erro ao carregar perfil: ${error.message}`);
+    state.profile = null;
+    return;
+  }
+
+  if (data) {
+    state.profile = data;
+    updateAuthUi();
+    return;
+  }
+
+  // Fallback caso o gatilho de criação de perfil ainda não tenha rodado.
+  const { data: inserted, error: insertError } = await state.supabase
+    .from(TABLES.profiles)
+    .insert({ user_id: state.user.id, nome: state.user.email, email: state.user.email, role: "fiscalizacao" })
+    .select("user_id,nome,email,role,created_at,updated_at")
+    .single();
+
+  if (insertError) {
+    setDatabaseStatus(`Usuário autenticado, mas sem perfil: ${insertError.message}`);
+    showStatus(`Sem perfil de acesso: ${insertError.message}`);
+    state.profile = null;
+    return;
+  }
+
+  state.profile = inserted;
+  updateAuthUi();
+}
+
+async function loadRemoteData() {
+  if (!state.user || !state.supabase) return;
+  showStatus("Carregando dados do Supabase...");
+
+  const [limpezaResult, obrasResult] = await Promise.all([
+    state.supabase.from(TABLES.limpeza).select("*").order("sub", { ascending: true }).order("kmi", { ascending: true }),
+    state.supabase.from(TABLES.obras).select("*").order("sub", { ascending: true }).order("km", { ascending: true }),
+  ]);
+
+  if (limpezaResult.error || obrasResult.error) {
+    const message = limpezaResult.error?.message || obrasResult.error?.message || "Erro desconhecido";
+    setDatabaseStatus(`Erro ao consultar Supabase: ${message}`);
+    showStatus(`Erro ao consultar Supabase: ${message}`);
+    resetToEmptyData({ keepStatus: true });
+    return;
+  }
+
+  const generatedAt = new Date().toISOString();
+  const limpezaRows = (limpezaResult.data || []).map(mapLimpezaFromDb);
+  const obrasRows = (obrasResult.data || []).map(mapObraFromDb);
+
+  state.limpeza = {
+    title: "ZBV-ZAR PDM Limpeza",
+    sourceSheet: "public.limpeza",
+    sourceFile: "Supabase",
+    generatedAt,
+    rows: limpezaRows,
+    subSummary: calculateSubSummary(limpezaRows),
+  };
+
+  state.obras = {
+    title: "ZBV-ZAR Obras",
+    sourceSheet: "public.obras",
+    sourceFile: "Supabase",
+    generatedAt,
+    rows: obrasRows,
+  };
+
+  state.sourceLabel = "Supabase";
+  fillFilterOptions();
+  renderAll();
+  renderManagementTables();
+  setDatabaseStatus(`Conectado. ${limpezaRows.length} registros de limpeza e ${obrasRows.length} obras carregados do Supabase.`);
+  hideStatus();
+
+  if (isCoordenacao()) await Promise.all([loadAuditLogs({ silent: true }), loadProfiles({ silent: true })]);
 }
 
 function resetToEmptyData(options = {}) {
   state.loadErrors = [];
   state.limpeza = {
     title: "ZBV-ZAR PDM Limpeza",
-    sourceSheet: "",
+    sourceSheet: "Supabase",
     sourceFile: "",
     generatedAt: null,
     rows: [],
@@ -98,529 +347,118 @@ function resetToEmptyData(options = {}) {
   };
   state.obras = {
     title: "ZBV-ZAR Obras",
-    sourceSheet: "",
+    sourceSheet: "Supabase",
     sourceFile: "",
     generatedAt: null,
     rows: [],
   };
-  state.sourceLabel = "Nenhuma planilha carregada";
+  state.auditLogs = [];
+  state.profiles = [];
+  state.sourceLabel = "Supabase";
   fillFilterOptions();
   renderAll();
-  setLoadedFileInfo(`Nenhuma planilha local carregada. O dashboard está zerado até a importação da planilha PDM. Versão ${APP_VERSION}.`);
-  if (!options.silent) {
-    showStatus("Dados locais removidos. Importe uma planilha PDM para preencher o dashboard.");
-    setTimeout(hideStatus, 3500);
-  } else {
-    hideStatus();
-  }
+  renderManagementTables();
+  renderAuditLogs();
+  renderProfilesTable();
+  if (!options.keepStatus) hideStatus();
 }
 
-async function importSelectedWorkbook() {
-  const input = document.getElementById("pdmFileInput");
-  const file = input?.files?.[0];
+function updateAuthUi() {
+  const authPanel = document.getElementById("authPanel");
+  const roleLabel = document.getElementById("userRoleLabel");
+  const signOutBtn = document.getElementById("signOutBtn");
+  const emailInput = document.getElementById("authEmail");
+  const passwordInput = document.getElementById("authPassword");
 
-  if (!file) {
-    showStatus("Selecione primeiro a planilha PDM em formato .xlsx ou .xlsm.");
-    return;
+  const signedIn = Boolean(state.user);
+  authPanel.classList.toggle("signed-in", signedIn);
+  signOutBtn.classList.toggle("hidden", !signedIn);
+
+  if (signedIn) {
+    emailInput.value = state.user.email || "";
+    passwordInput.value = "";
   }
 
-  if (!/\.(xlsx|xlsm)$/i.test(file.name)) {
-    showStatus("Formato não suportado. Use uma planilha .xlsx ou .xlsm.");
-    return;
-  }
-
-  if (typeof DecompressionStream === "undefined") {
-    showStatus("Este navegador não possui suporte necessário para ler Excel localmente. Use Chrome ou Edge atualizado.");
-    return;
-  }
-
-  showStatus("Lendo planilha local no navegador. Nenhum arquivo será enviado para a internet...");
-  setLoadedFileInfo(`Lendo ${file.name}... aguarde.`);
-
-  try {
-    const workbookData = await parsePdmWorkbook(file);
-    const generatedAt = file.lastModified ? new Date(file.lastModified).toISOString() : new Date().toISOString();
-
-    state.limpeza = {
-      title: "ZBV-ZAR PDM Limpeza",
-      sourceSheet: workbookData.limpezaSheetName,
-      sourceFile: file.name,
-      generatedAt,
-      rows: workbookData.limpezaRows,
-      subSummary: calculateSubSummary(workbookData.limpezaRows),
-    };
-
-    state.obras = {
-      title: "ZBV-ZAR Obras",
-      sourceSheet: workbookData.obrasSheetName,
-      sourceFile: file.name,
-      generatedAt,
-      rows: workbookData.obrasRows,
-    };
-
-    state.sourceLabel = `Planilha local: ${file.name}`;
-    fillFilterOptions();
-    renderAll();
-    setLoadedFileInfo(`Planilha carregada: ${file.name} • Limpeza: ${workbookData.limpezaRows.length} equipamentos • Obras: ${workbookData.obrasRows.length} • Versão ${APP_VERSION}`);
-    showStatus(`Planilha importada com sucesso. Abas lidas: ${workbookData.limpezaSheetName} e ${workbookData.obrasSheetName}.`);
-    setTimeout(hideStatus, 4500);
-  } catch (error) {
-    console.error(error);
-    setLoadedFileInfo(`Falha na importação de ${file.name}: ${error.message}`);
-    showStatus(`Não foi possível importar a planilha: ${error.message}`);
-  }
+  const role = state.profile?.role;
+  roleLabel.textContent = signedIn ? (ROLE_LABELS[role] || "Sem perfil") : "—";
 }
 
-function setLoadedFileInfo(message) {
-  const el = document.getElementById("loadedFileInfo");
-  if (el) el.textContent = message;
+function applyPermissions() {
+  const write = canWrite();
+  const coord = isCoordenacao();
+
+  document.querySelectorAll("[data-requires-write]").forEach((el) => { el.hidden = !write; });
+  document.querySelectorAll("[data-requires-coordenacao]").forEach((el) => { el.hidden = !coord; });
+
+  document.querySelectorAll("#panel-gestao input, #panel-gestao select, #panel-gestao button").forEach((el) => {
+    el.disabled = !write;
+  });
+
+  const activeTab = document.querySelector(".tab.active");
+  if (activeTab?.hidden) activatePanel("overview");
+
+  renderAll();
+  renderManagementTables();
+  renderAuditLogs();
+  renderProfilesTable();
 }
 
+function canWrite() {
+  return ["coordenacao", "analista"].includes(state.profile?.role);
+}
 
-async function parsePdmWorkbook(file) {
-  const buffer = await file.arrayBuffer();
-  const zip = parseZipCentralDirectory(buffer);
+function isCoordenacao() {
+  return state.profile?.role === "coordenacao";
+}
 
-  const workbookXml = await readZipText(zip, "xl/workbook.xml");
-  const relsXml = await readZipText(zip, "xl/_rels/workbook.xml.rels");
-  const workbookDoc = parseXml(workbookXml, "workbook.xml");
-  const relsDoc = parseXml(relsXml, "workbook.xml.rels");
-  const sharedStrings = await readSharedStrings(zip);
-  const sheets = parseWorkbookSheets(workbookDoc, relsDoc);
-
-  const limpezaSheet = findWorkbookSheet(sheets, TARGET_SHEETS.limpeza);
-  const obrasSheet = findWorkbookSheet(sheets, TARGET_SHEETS.obras);
-
-  if (!limpezaSheet) {
-    throw new Error(`Aba de limpeza não encontrada. Abas disponíveis: ${sheets.map((sheet) => sheet.name).join(", ")}`);
-  }
-
-  if (!obrasSheet) {
-    throw new Error(`Aba de obras não encontrada. Abas disponíveis: ${sheets.map((sheet) => sheet.name).join(", ")}`);
-  }
-
-  const limpezaMatrix = parseWorksheetMatrix(
-    parseXml(await readZipText(zip, limpezaSheet.path), limpezaSheet.path),
-    sharedStrings
-  );
-
-  const obrasMatrix = parseWorksheetMatrix(
-    parseXml(await readZipText(zip, obrasSheet.path), obrasSheet.path),
-    sharedStrings
-  );
-
+function mapLimpezaFromDb(row) {
+  const ext = Number(row.ext) || 0;
+  const extReal = Number(row.ext_real) || 0;
   return {
-    limpezaSheetName: limpezaSheet.name,
-    obrasSheetName: obrasSheet.name,
-    limpezaRows: normalizeLimpezaFromMatrix(limpezaMatrix),
-    obrasRows: normalizeObrasFromMatrix(obrasMatrix),
+    id: row.id,
+    excelRow: row.excel_row,
+    equipInfra: row.equip_infra,
+    atividade: row.atividade || "",
+    kmi: nullableInteger(row.kmi),
+    kmf: nullableInteger(row.kmf),
+    kmiReal: nullableInteger(row.kmi_real),
+    kmfReal: nullableInteger(row.kmf_real),
+    ext,
+    extM: row.ext_m || `${Math.round(ext)}m`,
+    extReal,
+    extRealM: row.ext_real_m || `${Math.round(extReal)}m`,
+    percentualReal: row.percentual_real === null || row.percentual_real === undefined ? (ext ? extReal / ext : 0) : Number(row.percentual_real),
+    sb: row.sb || "",
+    sub: row.sub || "",
+    percentualSub: Number(row.percentual_sub) || 0,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
   };
 }
 
-function parseZipCentralDirectory(buffer) {
-  const view = new DataView(buffer);
-  const bytes = new Uint8Array(buffer);
-  const decoder = new TextDecoder("utf-8");
-  const eocdSignature = 0x06054b50;
-  const centralSignature = 0x02014b50;
-  const localSignature = 0x04034b50;
-  const maxCommentLength = Math.min(bytes.length, 66000);
-
-  let eocdOffset = -1;
-  for (let i = bytes.length - 22; i >= bytes.length - maxCommentLength; i--) {
-    if (i < 0) break;
-    if (view.getUint32(i, true) === eocdSignature) {
-      eocdOffset = i;
-      break;
-    }
-  }
-
-  if (eocdOffset < 0) throw new Error("Arquivo Excel inválido ou corrompido.");
-
-  const centralDirectoryOffset = view.getUint32(eocdOffset + 16, true);
-  const totalEntries = view.getUint16(eocdOffset + 10, true);
-  const entries = new Map();
-  let offset = centralDirectoryOffset;
-
-  for (let i = 0; i < totalEntries; i++) {
-    if (view.getUint32(offset, true) !== centralSignature) break;
-
-    const compressionMethod = view.getUint16(offset + 10, true);
-    const compressedSize = view.getUint32(offset + 20, true);
-    const uncompressedSize = view.getUint32(offset + 24, true);
-    const fileNameLength = view.getUint16(offset + 28, true);
-    const extraLength = view.getUint16(offset + 30, true);
-    const commentLength = view.getUint16(offset + 32, true);
-    const localHeaderOffset = view.getUint32(offset + 42, true);
-    const fileName = decoder.decode(bytes.slice(offset + 46, offset + 46 + fileNameLength));
-
-    if (view.getUint32(localHeaderOffset, true) !== localSignature) {
-      throw new Error(`Entrada ZIP inválida: ${fileName}`);
-    }
-
-    const localFileNameLength = view.getUint16(localHeaderOffset + 26, true);
-    const localExtraLength = view.getUint16(localHeaderOffset + 28, true);
-    const dataStart = localHeaderOffset + 30 + localFileNameLength + localExtraLength;
-    const dataEnd = dataStart + compressedSize;
-
-    entries.set(fileName.replace(/^\//, ""), {
-      name: fileName,
-      compressionMethod,
-      compressedSize,
-      uncompressedSize,
-      data: buffer.slice(dataStart, dataEnd),
-    });
-
-    offset += 46 + fileNameLength + extraLength + commentLength;
-  }
-
-  return entries;
-}
-
-async function readZipText(zip, path) {
-  const entry = zip.get(path.replace(/^\//, ""));
-  if (!entry) throw new Error(`Arquivo interno não encontrado na planilha: ${path}`);
-
-  let data;
-  if (entry.compressionMethod === 0) {
-    data = entry.data;
-  } else if (entry.compressionMethod === 8) {
-    data = await inflateRaw(entry.data);
-  } else {
-    throw new Error(`Método de compressão não suportado na planilha: ${entry.compressionMethod}`);
-  }
-
-  return new TextDecoder("utf-8").decode(data);
-}
-
-async function inflateRaw(data) {
-  try {
-    const stream = new Blob([data]).stream().pipeThrough(new DecompressionStream("deflate-raw"));
-    return await new Response(stream).arrayBuffer();
-  } catch (rawError) {
-    try {
-      const stream = new Blob([data]).stream().pipeThrough(new DecompressionStream("deflate"));
-      return await new Response(stream).arrayBuffer();
-    } catch {
-      throw rawError;
-    }
-  }
-}
-
-function parseXml(text, label) {
-  const doc = new DOMParser().parseFromString(text, "application/xml");
-  const error = doc.getElementsByTagName("parsererror")[0];
-  if (error) throw new Error(`Erro ao ler ${label}.`);
-  return doc;
-}
-
-async function readSharedStrings(zip) {
-  if (!zip.has("xl/sharedStrings.xml")) return [];
-
-  const doc = parseXml(await readZipText(zip, "xl/sharedStrings.xml"), "sharedStrings.xml");
-  return Array.from(doc.getElementsByTagName("si")).map((si) => {
-    return Array.from(si.getElementsByTagName("t")).map((node) => node.textContent || "").join("");
-  });
-}
-
-function parseWorkbookSheets(workbookDoc, relsDoc) {
-  const relMap = new Map();
-  Array.from(relsDoc.getElementsByTagName("Relationship")).forEach((rel) => {
-    const id = rel.getAttribute("Id");
-    const target = rel.getAttribute("Target") || "";
-    if (id) relMap.set(id, normalizeWorkbookTarget(target));
-  });
-
-  return Array.from(workbookDoc.getElementsByTagName("sheet")).map((sheet) => {
-    const relId = sheet.getAttribute("r:id") || sheet.getAttributeNS("http://schemas.openxmlformats.org/officeDocument/2006/relationships", "id");
-    return {
-      name: sheet.getAttribute("name") || "Sem nome",
-      relId,
-      path: relMap.get(relId),
-    };
-  }).filter((sheet) => sheet.path);
-}
-
-function normalizeWorkbookTarget(target) {
-  if (!target) return "";
-  if (target.startsWith("/")) return target.replace(/^\//, "");
-  const parts = (`xl/${target}`).split("/");
-  const normalized = [];
-  parts.forEach((part) => {
-    if (!part || part === ".") return;
-    if (part === "..") normalized.pop();
-    else normalized.push(part);
-  });
-  return normalized.join("/");
-}
-
-function findWorkbookSheet(sheets, candidates) {
-  const normalizedCandidates = candidates.map(normalizeHeader);
-
-  return sheets.find((sheet) => normalizedCandidates.includes(normalizeHeader(sheet.name))) ||
-    sheets.find((sheet) => normalizedCandidates.some((candidate) => normalizeHeader(sheet.name).includes(candidate)));
-}
-
-function parseWorksheetMatrix(sheetDoc, sharedStrings) {
-  const rawRows = [];
-  const rowNodes = Array.from(sheetDoc.getElementsByTagName("row"));
-
-  rowNodes.forEach((rowNode) => {
-    const excelRow = Number(rowNode.getAttribute("r"));
-    const targetRowIndex = Number.isFinite(excelRow) && excelRow > 0 ? excelRow - 1 : rawRows.length;
-    const row = rawRows[targetRowIndex] || [];
-
-    Array.from(rowNode.getElementsByTagName("c")).forEach((cell) => {
-      const reference = cell.getAttribute("r") || "";
-      const columnLetters = reference.replace(/\d+/g, "");
-      const columnIndex = columnLetters ? columnNameToIndex(columnLetters) : row.length;
-      row[columnIndex] = readCellValue(cell, sharedStrings);
-    });
-
-    rawRows[targetRowIndex] = row;
-  });
-
-  const compactRows = rawRows.filter(Boolean);
-  const maxLength = compactRows.reduce((max, row) => Math.max(max, row.length), 0);
-  return compactRows.map((row) => Array.from({ length: maxLength }, (_, index) => row[index] ?? ""));
-}
-
-function columnNameToIndex(name) {
-  return String(name || "").toUpperCase().split("").reduce((index, char) => {
-    return index * 26 + char.charCodeAt(0) - 64;
-  }, 0) - 1;
-}
-
-function readCellValue(cell, sharedStrings) {
-  const type = cell.getAttribute("t");
-  const valueNode = cell.getElementsByTagName("v")[0];
-  const rawValue = valueNode ? valueNode.textContent || "" : "";
-
-  if (type === "s") {
-    return sharedStrings[Number(rawValue)] ?? "";
-  }
-
-  if (type === "inlineStr") {
-    const inline = cell.getElementsByTagName("is")[0] || cell;
-    return Array.from(inline.getElementsByTagName("t")).map((node) => node.textContent || "").join("");
-  }
-
-  if (type === "b") return rawValue === "1" ? "TRUE" : "FALSE";
-  return rawValue;
-}
-
-function normalizeHeader(value) {
-  return String(value || "")
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .replace(/[^A-Z0-9]+/gi, " ")
-    .replace(/\s+/g, " ")
-    .trim()
-    .toUpperCase();
-}
-
-function compactHeader(value) {
-  return normalizeHeader(value).replace(/\s+/g, "");
-}
-
-function findHeaderRow(matrix, requiredTerms) {
-  return matrix.findIndex((row) => {
-    const map = headerMap(row);
-    return requiredTerms.every((term) => {
-      const aliases = Array.isArray(term) ? term : [term];
-      return getHeaderIndex(map, aliases) !== undefined;
-    });
-  });
-}
-
-function headerMap(row) {
-  const map = {};
-  row.forEach((cell, index) => {
-    const key = normalizeHeader(cell);
-    const compact = compactHeader(cell);
-    if (key && map[key] === undefined) map[key] = index;
-    if (compact && map[compact] === undefined) map[compact] = index;
-  });
-  return map;
-}
-
-function getHeaderIndex(map, aliases) {
-  for (const alias of aliases) {
-    const key = normalizeHeader(alias);
-    const compact = compactHeader(alias);
-    if (map[key] !== undefined) return map[key];
-    if (map[compact] !== undefined) return map[compact];
-  }
-
-  const keys = Object.keys(map);
-  for (const alias of aliases) {
-    const key = normalizeHeader(alias);
-    const compact = compactHeader(alias);
-    const found = keys.find((mapKey) => mapKey.includes(key) || mapKey.includes(compact));
-    if (found !== undefined) return map[found];
-  }
-
-  return undefined;
-}
-
-function getByHeader(row, map, name) {
-  return getByAnyHeader(row, map, [name]);
-}
-
-function getByAnyHeader(row, map, aliases) {
-  const index = getHeaderIndex(map, aliases);
-  return index === undefined ? "" : row[index];
-}
-
-function normalizeLimpezaFromMatrix(matrix) {
-  const headerIndex = findHeaderRow(matrix, [["EQUIP_INFRA", "EQUIP INFRA", "EQUIPAMENTO INFRA"], ["EXT", "EXTENSÃO"], ["EXT REAL", "EXT REALIZADA", "EXECUTADO"]]);
-  if (headerIndex < 0) throw new Error("Cabeçalho da aba de limpeza não encontrado.");
-
-  const map = headerMap(matrix[headerIndex]);
-  const rows = [];
-
-  matrix.slice(headerIndex + 1).forEach((row, index) => {
-    const equip = String(getByAnyHeader(row, map, ["EQUIP_INFRA", "EQUIP INFRA", "EQUIPAMENTO INFRA"]) || "").trim();
-    if (!equip || !equip.includes("/")) return;
-
-    const ext = parseNumber(getByAnyHeader(row, map, ["EXT", "EXTENSÃO", "EXTENSAO"]));
-    const real = parseNumber(getByAnyHeader(row, map, ["EXT REAL", "EXT REALIZADA", "EXT EXECUTADA", "EXECUTADO"]));
-    const sub = String(getByAnyHeader(row, map, ["SUB", "SUBDIVISÃO", "SUBDIVISAO"]) || equip.split("/")[0] || "").trim();
-
-    rows.push({
-      excelRow: headerIndex + index + 2,
-      equipInfra: equip,
-      atividade: String(getByAnyHeader(row, map, ["ATV", "ATIVIDADE"]) || "").trim(),
-      kmi: parseInteger(getByAnyHeader(row, map, ["KMI", "KM INICIAL"])),
-      kmf: parseInteger(getByAnyHeader(row, map, ["KMF", "KM FINAL"])),
-      kmiReal: parseInteger(getByAnyHeader(row, map, ["KMI REAL", "KM INICIAL REAL"])),
-      kmfReal: parseInteger(getByAnyHeader(row, map, ["KMF REAL", "KM FINAL REAL"])),
-      ext,
-      extM: `${Math.round(ext)}m`,
-      extReal: real,
-      extRealM: `${Math.round(real)}m`,
-      percentualReal: ext ? real / ext : 0,
-      sb: cleanOptional(getByAnyHeader(row, map, ["SB", "SUBTRECHO"])),
-      sub,
-      percentualSub: parseNumber(getByAnyHeader(row, map, ["%SUB", "PERCENTUAL SUB"])),
-    });
-  });
-
-  return rows;
-}
-
-function normalizeObrasFromMatrix(matrix) {
-  const headerIndex = findHeaderRow(matrix, [["SUB", "SUBDIVISÃO", "SUBDIVISAO"], ["DESCRIÇÃO OBRA", "DESCRICAO OBRA", "DESCRIÇÃO DA OBRA", "OBRA"], ["STATUS", "SITUAÇÃO", "SITUACAO"]]);
-  if (headerIndex < 0) throw new Error("Cabeçalho da aba de obras não encontrado.");
-
-  const map = headerMap(matrix[headerIndex]);
-  const rows = [];
-  let currentSub = "";
-
-  matrix.slice(headerIndex + 1).forEach((row, index) => {
-    const maybeSub = cleanOptional(getByAnyHeader(row, map, ["SUB", "SUBDIVISÃO", "SUBDIVISAO"]));
-    if (maybeSub) currentSub = maybeSub;
-
-    const descricao = cleanOptional(getByAnyHeader(row, map, ["DESCRIÇÃO OBRA", "DESCRICAO OBRA", "DESCRIÇÃO DA OBRA", "OBRA"]));
-    if (!descricao || descricao.toLowerCase().includes("plano de drenagem")) return;
-
-    const status = cleanOptional(getByAnyHeader(row, map, ["STATUS", "SITUAÇÃO", "SITUACAO"])) || "NÃO INFORMADO";
-    rows.push({
-      excelRow: headerIndex + index + 2,
-      sub: currentSub,
-      sb: cleanOptional(getByAnyHeader(row, map, ["SB", "SUBTRECHO"])),
-      km: parseInteger(getByAnyHeader(row, map, ["KM", "KILOMETRO", "QUILÔMETRO", "QUILOMETRO"])),
-      descricao,
-      tipoObra: cleanOptional(getByAnyHeader(row, map, ["TIPO DE OBRA", "TIPO OBRA"])),
-      risco: cleanOptional(getByAnyHeader(row, map, ["RISCO", "RISCO MATRIZ", "MATRIZ DE RISCO"])),
-      motivo: cleanOptional(getByAnyHeader(row, map, ["MOTIVO", "JUSTIFICATIVA"])),
-      equipamento: cleanOptional(getByAnyHeader(row, map, ["EQUIPAMENTO", "EQUIP_INFRA", "EQUIP INFRA"])),
-      extEq: parseNullableNumber(getByAnyHeader(row, map, ["EXT EQ.", "EXT EQ", "EXTENSÃO EQ", "EXTENSAO EQ"])),
-      extEqM: cleanOptional(getByAnyHeader(row, map, ["EXT EQ.(M)", "EXT EQ M", "EXTENSÃO EQ M", "EXTENSAO EQ M"])),
-      prazoMes: parseNullableNumber(getByAnyHeader(row, map, ["PRAZO (MÊS)", "PRAZO MES", "PRAZO"])),
-      dtInicio: cleanOptional(getByAnyHeader(row, map, ["DT INÍCIO", "DT INICIO", "DATA INÍCIO", "DATA INICIO"])),
-      status,
-      progresso: statusToProgress(status),
-      obs: cleanOptional(getByAnyHeader(row, map, ["OBS.", "OBS", "OBSERVAÇÃO", "OBSERVACAO"])),
-    });
-  });
-
-  return rows;
-}
-
-function cleanOptional(value) {
-  const text = String(value ?? "").trim();
-  return text && text !== "-" ? text : "";
-}
-
-function parseNumber(value) {
-  if (typeof value === "number") return value;
-  const text = String(value ?? "")
-    .replace(/\s/g, "")
-    .replace(/m/gi, "")
-    .replace("%", "");
-  if (!text || text === "-") return 0;
-  const normalized = text.includes(",") && !text.includes(".")
-    ? text.replace(/\./g, "").replace(",", ".")
-    : text.replace(",", ".");
-  const number = Number(normalized);
-  return Number.isFinite(number) ? number : 0;
-}
-
-function parseNullableNumber(value) {
-  if (value === null || value === undefined || String(value).trim() === "" || String(value).trim() === "-") return null;
-  return parseNumber(value);
-}
-
-function parseInteger(value) {
-  const number = parseNullableNumber(value);
-  return number === null ? null : Math.round(number);
-}
-
-function statusToProgress(status) {
-  const normalized = normalizeHeader(status);
-  if (normalized.includes("CONCLUI")) return 1;
-  if (normalized.includes("ANDAMENTO")) return 0.5;
-  return 0;
-}
-
-function calculateSubSummary(rows) {
-  const groups = new Map();
-
-  rows.forEach((row) => {
-    const sub = String(row.sub || "").trim() || "Sem SUB";
-    if (!groups.has(sub)) groups.set(sub, []);
-    groups.get(sub).push(row);
-  });
-
-  return Array.from(groups.entries())
-    .sort(([a], [b]) => Number(a) - Number(b))
-    .map(([sub, items]) => {
-      const planejadoM = sum(items, "ext");
-      const realizadoM = sum(items, "extReal");
-      const atividades = {};
-
-      items.forEach((item) => {
-        const key = item.atividade || "Sem ATV";
-        atividades[key] = (atividades[key] || 0) + 1;
-      });
-
-      return {
-        sub,
-        planejadoM,
-        realizadoM,
-        saldoM: Math.max(planejadoM - realizadoM, 0),
-        percentual: planejadoM ? realizadoM / planejadoM : 0,
-        quantidadeFrentes: items.length,
-        frentesConcluidas: items.filter((item) => item.ext > 0 && item.extReal >= item.ext).length,
-        frentesAndamento: items.filter((item) => item.extReal > 0 && item.extReal < item.ext).length,
-        frentesPendentes: items.filter((item) => !item.extReal).length,
-        kmInicial: min(items.map((item) => item.kmi).filter(Number.isFinite)),
-        kmFinal: max(items.map((item) => item.kmf).filter(Number.isFinite)),
-        sbs: unique(items.map((item) => item.sb).filter(Boolean)),
-        atividades,
-      };
-    });
+function mapObraFromDb(row) {
+  return {
+    id: row.id,
+    seedKey: row.seed_key,
+    excelRow: row.excel_row,
+    sub: row.sub || "",
+    sb: row.sb || "",
+    km: nullableInteger(row.km),
+    descricao: row.descricao || "",
+    tipoObra: row.tipo_obra || "",
+    risco: row.risco || "",
+    motivo: row.motivo || "",
+    equipamento: row.equipamento || "",
+    extEq: nullableNumber(row.ext_eq),
+    extEqM: row.ext_eq_m || "",
+    prazoMes: nullableNumber(row.prazo_mes),
+    dtInicio: row.dt_inicio || "",
+    status: row.status || "NÃO INFORMADO",
+    progresso: row.progresso === null || row.progresso === undefined ? statusToProgress(row.status) : Number(row.progresso),
+    obs: row.obs || "",
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
 }
 
 function renderAll() {
@@ -660,7 +498,7 @@ function renderOverview() {
     .map((sub) => compactProgressRow(`SUB ${escapeHtml(sub.sub)}`, formatPercent(sub.percentual), sub.percentual))
     .join("");
   document.getElementById("overviewSubList").innerHTML = subListHtml ||
-    `<div class="empty-state small">Importe uma planilha PDM para visualizar as SUBs.</div>`;
+    `<div class="empty-state small">Entre no Supabase para visualizar as SUBs.</div>`;
 
   const statusCounts = countBy(obraRows, (row) => row.status || "NÃO INFORMADO");
   const obrasListHtml = Object.entries(statusCounts)
@@ -668,7 +506,7 @@ function renderOverview() {
     .map(([status, count]) => compactProgressRow(escapeHtml(status), `${count} obra(s)`, count / Math.max(obraRows.length, 1)))
     .join("");
   document.getElementById("overviewObrasList").innerHTML = obrasListHtml ||
-    `<div class="empty-state small">Importe uma planilha PDM para visualizar as obras.</div>`;
+    `<div class="empty-state small">Entre no Supabase para visualizar as obras.</div>`;
 }
 
 function kpiCard(label, value, detail) {
@@ -713,7 +551,7 @@ function renderLimpeza() {
 
   const container = document.getElementById("limpezaCards");
   if (!summaries.length) {
-    container.innerHTML = `<div class="empty-state">Nenhuma SUB carregada. Importe uma planilha PDM local para preencher este dashboard.</div>`;
+    container.innerHTML = `<div class="empty-state">Nenhuma SUB carregada. Entre no Supabase e confira se a carga inicial foi executada.</div>`;
     return;
   }
 
@@ -736,6 +574,7 @@ function renderLimpeza() {
           <div><span>EXT</span><strong>${formatMeters(row.ext)}</strong></div>
           <div><span>EXT real</span><strong>${formatMeters(row.extReal)}</strong></div>
         </div>
+        ${recordActions("limpeza", row.id)}
       </div>
     `).join("");
 
@@ -787,7 +626,7 @@ function renderObras() {
   let rows = state.obras.rows || [];
   if (selectedSub) rows = rows.filter((row) => String(row.sub) === selectedSub);
   if (selectedStatus) rows = rows.filter((row) => String(row.status) === selectedStatus);
-  if (selectedRisco) rows = rows.filter((row) => String(row.risco) === selectedRisco);
+  if (selectedRisco) rows = rows.filter((row) => String(row.risco || "Não informado") === selectedRisco);
 
   if (search) {
     rows = rows.filter((row) => normalizeHeader([
@@ -806,7 +645,7 @@ function renderObras() {
 
   const container = document.getElementById("obrasCards");
   if (!rows.length) {
-    container.innerHTML = `<div class="empty-state">Nenhuma obra carregada. Importe uma planilha PDM local para preencher este dashboard.</div>`;
+    container.innerHTML = `<div class="empty-state">Nenhuma obra carregada. Entre no Supabase e confira se a carga inicial foi executada.</div>`;
     return;
   }
 
@@ -840,9 +679,22 @@ function renderObras() {
 
         <p><strong>Motivo:</strong> ${escapeHtml(row.motivo || "—")}</p>
         ${row.obs ? `<p><strong>Observação:</strong> ${escapeHtml(row.obs)}</p>` : ""}
+        ${recordActions("obra", row.id)}
       </article>
     `;
   }).join("");
+}
+
+function recordActions(kind, id) {
+  if (!canWrite() || !id) return "";
+  const editAction = kind === "limpeza" ? "edit-limpeza" : "edit-obra";
+  const deleteAction = kind === "limpeza" ? "delete-limpeza" : "delete-obra";
+  return `
+    <div class="record-actions">
+      <button class="ghost-btn tiny-btn" type="button" data-action="${editAction}" data-id="${escapeAttribute(id)}">Editar</button>
+      <button class="ghost-btn tiny-btn danger-btn" type="button" data-action="${deleteAction}" data-id="${escapeAttribute(id)}">Excluir</button>
+    </div>
+  `;
 }
 
 function fillFilterOptions() {
@@ -858,6 +710,387 @@ function fillSelect(id, options, firstLabel) {
   select.innerHTML = `<option value="">${escapeHtml(firstLabel)}</option>` +
     options.map((option) => `<option value="${escapeAttribute(option)}">${escapeHtml(option)}</option>`).join("");
   if (options.includes(current)) select.value = current;
+}
+
+async function saveLimpeza(event) {
+  event.preventDefault();
+  if (!canWrite()) return showStatus("Seu perfil não permite alterar dados.");
+
+  const id = document.getElementById("limpezaId").value;
+  const ext = getNumberInput("limpezaExt") || 0;
+  const extReal = getNumberInput("limpezaExtReal") || 0;
+  const payload = {
+    equip_infra: getValue("limpezaEquipInfra"),
+    atividade: getValue("limpezaAtividade"),
+    sub: getValue("limpezaSub"),
+    sb: getValue("limpezaSb"),
+    kmi: getIntegerInput("limpezaKmi"),
+    kmf: getIntegerInput("limpezaKmf"),
+    kmi_real: getIntegerInput("limpezaKmiReal"),
+    kmf_real: getIntegerInput("limpezaKmfReal"),
+    ext,
+    ext_m: `${Math.round(ext)}m`,
+    ext_real: extReal,
+    ext_real_m: `${Math.round(extReal)}m`,
+    percentual_real: ext ? extReal / ext : 0,
+    percentual_sub: 0,
+  };
+
+  if (!payload.equip_infra) return showStatus("Informe o equipamento infra.");
+
+  const result = id
+    ? await state.supabase.from(TABLES.limpeza).update(payload).eq("id", id)
+    : await state.supabase.from(TABLES.limpeza).insert(payload);
+
+  if (result.error) return showStatus(`Erro ao salvar limpeza: ${result.error.message}`);
+  resetLimpezaForm();
+  await loadRemoteData();
+  showStatus("Registro de limpeza salvo no Supabase.");
+  setTimeout(hideStatus, 2500);
+}
+
+async function saveObra(event) {
+  event.preventDefault();
+  if (!canWrite()) return showStatus("Seu perfil não permite alterar dados.");
+
+  const id = document.getElementById("obraId").value;
+  const extEq = getNumberInput("obraExtEq");
+  const status = getValue("obraStatus") || "NÃO INFORMADO";
+  const payload = {
+    sub: getValue("obraSub"),
+    sb: getValue("obraSb"),
+    km: getIntegerInput("obraKm"),
+    descricao: getValue("obraDescricao"),
+    tipo_obra: getValue("obraTipo"),
+    risco: getValue("obraRisco"),
+    motivo: getValue("obraMotivo"),
+    equipamento: getValue("obraEquipamento"),
+    ext_eq: extEq,
+    ext_eq_m: extEq === null ? "" : `${Math.round(extEq)}m`,
+    prazo_mes: getNumberInput("obraPrazoMes"),
+    dt_inicio: getValue("obraDtInicio") || null,
+    status,
+    progresso: statusToProgress(status),
+    obs: getValue("obraObs"),
+  };
+
+  if (!payload.descricao) return showStatus("Informe a descrição da obra.");
+
+  const result = id
+    ? await state.supabase.from(TABLES.obras).update(payload).eq("id", id)
+    : await state.supabase.from(TABLES.obras).insert(payload);
+
+  if (result.error) return showStatus(`Erro ao salvar obra: ${result.error.message}`);
+  resetObraForm();
+  await loadRemoteData();
+  showStatus("Obra salva no Supabase.");
+  setTimeout(hideStatus, 2500);
+}
+
+function editLimpeza(id) {
+  const row = state.limpeza.rows.find((item) => String(item.id) === String(id));
+  if (!row) return;
+  activatePanel("gestao");
+  document.getElementById("limpezaFormTitle").textContent = "Editar registro";
+  setValue("limpezaId", row.id);
+  setValue("limpezaEquipInfra", row.equipInfra);
+  setValue("limpezaAtividade", row.atividade);
+  setValue("limpezaSub", row.sub);
+  setValue("limpezaSb", row.sb);
+  setValue("limpezaKmi", row.kmi);
+  setValue("limpezaKmf", row.kmf);
+  setValue("limpezaKmiReal", row.kmiReal);
+  setValue("limpezaKmfReal", row.kmfReal);
+  setValue("limpezaExt", row.ext);
+  setValue("limpezaExtReal", row.extReal);
+  document.getElementById("limpezaEquipInfra").focus();
+}
+
+function editObra(id) {
+  const row = state.obras.rows.find((item) => String(item.id) === String(id));
+  if (!row) return;
+  activatePanel("gestao");
+  document.getElementById("obraFormTitle").textContent = "Editar obra";
+  setValue("obraId", row.id);
+  setValue("obraSub", row.sub);
+  setValue("obraSb", row.sb);
+  setValue("obraKm", row.km);
+  setValue("obraDescricao", row.descricao);
+  setValue("obraTipo", row.tipoObra);
+  setValue("obraRisco", row.risco);
+  setValue("obraMotivo", row.motivo);
+  setValue("obraEquipamento", row.equipamento);
+  setValue("obraExtEq", row.extEq);
+  setValue("obraPrazoMes", row.prazoMes);
+  setValue("obraDtInicio", row.dtInicio);
+  setValue("obraStatus", row.status || "NÃO INICIADO");
+  setValue("obraObs", row.obs);
+  document.getElementById("obraDescricao").focus();
+}
+
+async function deleteLimpeza(id) {
+  if (!canWrite()) return showStatus("Seu perfil não permite excluir dados.");
+  const row = state.limpeza.rows.find((item) => String(item.id) === String(id));
+  if (!confirm(`Excluir o registro de limpeza ${row?.equipInfra || "selecionado"}?`)) return;
+  const { error } = await state.supabase.from(TABLES.limpeza).delete().eq("id", id);
+  if (error) return showStatus(`Erro ao excluir limpeza: ${error.message}`);
+  await loadRemoteData();
+  showStatus("Registro de limpeza excluído.");
+  setTimeout(hideStatus, 2500);
+}
+
+async function deleteObra(id) {
+  if (!canWrite()) return showStatus("Seu perfil não permite excluir dados.");
+  const row = state.obras.rows.find((item) => String(item.id) === String(id));
+  if (!confirm(`Excluir a obra ${row?.descricao || "selecionada"}?`)) return;
+  const { error } = await state.supabase.from(TABLES.obras).delete().eq("id", id);
+  if (error) return showStatus(`Erro ao excluir obra: ${error.message}`);
+  await loadRemoteData();
+  showStatus("Obra excluída.");
+  setTimeout(hideStatus, 2500);
+}
+
+function resetLimpezaForm() {
+  document.getElementById("limpezaFormTitle").textContent = "Novo registro";
+  document.getElementById("limpezaForm").reset();
+  document.getElementById("limpezaId").value = "";
+}
+
+function resetObraForm() {
+  document.getElementById("obraFormTitle").textContent = "Nova obra";
+  document.getElementById("obraForm").reset();
+  document.getElementById("obraId").value = "";
+  document.getElementById("obraStatus").value = "NÃO INICIADO";
+}
+
+function renderManagementTables() {
+  renderLimpezaManagementTable();
+  renderObrasManagementTable();
+}
+
+function renderLimpezaManagementTable() {
+  const table = document.getElementById("limpezaManageTable");
+  if (!table) return;
+  const rows = state.limpeza.rows || [];
+  table.innerHTML = `
+    <thead><tr><th>Equipamento</th><th>SUB</th><th>ATV</th><th>Planejado</th><th>Realizado</th><th>Ações</th></tr></thead>
+    <tbody>
+      ${rows.map((row) => `
+        <tr>
+          <td>${escapeHtml(row.equipInfra)}</td>
+          <td>${escapeHtml(row.sub || "—")}</td>
+          <td>${escapeHtml(row.atividade || "—")}</td>
+          <td>${formatMeters(row.ext)}</td>
+          <td>${formatMeters(row.extReal)}</td>
+          <td>${recordActions("limpeza", row.id)}</td>
+        </tr>
+      `).join("") || `<tr><td colspan="6">Nenhum registro carregado.</td></tr>`}
+    </tbody>`;
+}
+
+function renderObrasManagementTable() {
+  const table = document.getElementById("obrasManageTable");
+  if (!table) return;
+  const rows = state.obras.rows || [];
+  table.innerHTML = `
+    <thead><tr><th>Descrição</th><th>SUB</th><th>KM</th><th>Status</th><th>Risco</th><th>Ações</th></tr></thead>
+    <tbody>
+      ${rows.map((row) => `
+        <tr>
+          <td>${escapeHtml(row.descricao)}</td>
+          <td>${escapeHtml(row.sub || "—")}</td>
+          <td>${formatKm(row.km)}</td>
+          <td>${escapeHtml(row.status || "—")}</td>
+          <td>${escapeHtml(row.risco || "—")}</td>
+          <td>${recordActions("obra", row.id)}</td>
+        </tr>
+      `).join("") || `<tr><td colspan="6">Nenhuma obra carregada.</td></tr>`}
+    </tbody>`;
+}
+
+async function loadAuditLogs(options = {}) {
+  if (!isCoordenacao() || !state.supabase) return;
+  if (!options.silent) showStatus("Carregando auditoria...");
+
+  const { data, error } = await state.supabase
+    .from(TABLES.audit)
+    .select("id,table_name,record_id,action,user_id,user_email,old_data,new_data,created_at")
+    .order("created_at", { ascending: false })
+    .limit(100);
+
+  if (error) {
+    showStatus(`Erro ao carregar auditoria: ${error.message}`);
+    return;
+  }
+
+  state.auditLogs = data || [];
+  renderAuditLogs();
+  if (!options.silent) {
+    showStatus("Auditoria atualizada.");
+    setTimeout(hideStatus, 2500);
+  }
+}
+
+async function loadProfiles(options = {}) {
+  if (!isCoordenacao() || !state.supabase) return;
+  if (!options.silent) showStatus("Carregando usuários...");
+
+  const { data, error } = await state.supabase
+    .from(TABLES.profiles)
+    .select("user_id,nome,email,role,created_at,updated_at")
+    .order("email", { ascending: true });
+
+  if (error) {
+    showStatus(`Erro ao carregar usuários: ${error.message}`);
+    return;
+  }
+
+  state.profiles = data || [];
+  renderProfilesTable();
+  if (!options.silent) {
+    showStatus("Usuários atualizados.");
+    setTimeout(hideStatus, 2500);
+  }
+}
+
+async function updateUserRole(userId, role) {
+  if (!isCoordenacao()) return showStatus("Somente Coordenação pode alterar perfis.");
+  if (!userId || !ROLE_LABELS[role]) return showStatus("Perfil inválido.");
+
+  const { error } = await state.supabase
+    .from(TABLES.profiles)
+    .update({ role })
+    .eq("user_id", userId);
+
+  if (error) {
+    showStatus(`Erro ao alterar perfil: ${error.message}`);
+    await loadProfiles({ silent: true });
+    return;
+  }
+
+  if (state.user?.id === userId) {
+    await loadProfile();
+    applyPermissions();
+  }
+
+  await loadProfiles({ silent: true });
+  showStatus("Perfil de usuário atualizado.");
+  setTimeout(hideStatus, 2500);
+}
+
+function renderProfilesTable() {
+  const table = document.getElementById("profilesTable");
+  if (!table) return;
+
+  if (!isCoordenacao()) {
+    table.innerHTML = `<tbody><tr><td>A gestão de perfis é exclusiva do perfil Coordenação.</td></tr></tbody>`;
+    return;
+  }
+
+  const rows = state.profiles || [];
+  table.innerHTML = `
+    <thead><tr><th>E-mail</th><th>Nome</th><th>Perfil</th><th>Atualizado</th></tr></thead>
+    <tbody>
+      ${rows.map((profile) => `
+        <tr>
+          <td>${escapeHtml(profile.email || "—")}</td>
+          <td>${escapeHtml(profile.nome || "—")}</td>
+          <td>
+            <select data-action="change-role" data-user-id="${escapeAttribute(profile.user_id)}">
+              ${Object.entries(ROLE_LABELS).map(([value, label]) => `<option value="${value}" ${profile.role === value ? "selected" : ""}>${label}</option>`).join("")}
+            </select>
+          </td>
+          <td>${formatDateTime(profile.updated_at || profile.created_at)}</td>
+        </tr>
+      `).join("") || `<tr><td colspan="4">Nenhum usuário encontrado.</td></tr>`}
+    </tbody>`;
+}
+
+function renderAuditLogs() {
+  const table = document.getElementById("auditTable");
+  if (!table) return;
+
+  if (!isCoordenacao()) {
+    table.innerHTML = `<tbody><tr><td>A auditoria é exclusiva do perfil Coordenação.</td></tr></tbody>`;
+    return;
+  }
+
+  const rows = state.auditLogs || [];
+  table.innerHTML = `
+    <thead><tr><th>Data/hora</th><th>Usuário</th><th>Tabela</th><th>Ação</th><th>Registro</th><th>Detalhes</th></tr></thead>
+    <tbody>
+      ${rows.map((log) => `
+        <tr>
+          <td>${formatDateTime(log.created_at)}</td>
+          <td>${escapeHtml(log.user_email || log.user_id || "—")}</td>
+          <td>${escapeHtml(log.table_name)}</td>
+          <td>${escapeHtml(actionLabel(log.action))}</td>
+          <td><code>${escapeHtml(shortId(log.record_id))}</code></td>
+          <td>${escapeHtml(auditDetails(log))}</td>
+        </tr>
+      `).join("") || `<tr><td colspan="6">Nenhuma alteração registrada ainda.</td></tr>`}
+    </tbody>`;
+}
+
+function auditDetails(log) {
+  const newData = log.new_data || {};
+  const oldData = log.old_data || {};
+  if (log.action === "INSERT") return summarizeRecord(newData, "Criado");
+  if (log.action === "DELETE") return summarizeRecord(oldData, "Excluído");
+  const ignored = new Set(["updated_at", "created_at"]);
+  const keys = Object.keys({ ...oldData, ...newData }).filter((key) => !ignored.has(key));
+  const changed = keys.filter((key) => String(oldData[key] ?? "") !== String(newData[key] ?? ""));
+  return changed.length ? `Campos alterados: ${changed.slice(0, 8).join(", ")}` : "Atualização sem diferença visível";
+}
+
+function summarizeRecord(data, prefix) {
+  return `${prefix}: ${data.equip_infra || data.descricao || data.id || "registro"}`;
+}
+
+function actionLabel(action) {
+  if (action === "INSERT") return "Inserção";
+  if (action === "UPDATE") return "Edição";
+  if (action === "DELETE") return "Exclusão";
+  return action || "—";
+}
+
+function calculateSubSummary(rows) {
+  const groups = new Map();
+
+  rows.forEach((row) => {
+    const sub = String(row.sub || "").trim() || "Sem SUB";
+    if (!groups.has(sub)) groups.set(sub, []);
+    groups.get(sub).push(row);
+  });
+
+  return Array.from(groups.entries())
+    .sort(([a], [b]) => Number(a) - Number(b))
+    .map(([sub, items]) => {
+      const planejadoM = sum(items, "ext");
+      const realizadoM = sum(items, "extReal");
+      const atividades = {};
+
+      items.forEach((item) => {
+        const key = item.atividade || "Sem ATV";
+        atividades[key] = (atividades[key] || 0) + 1;
+      });
+
+      return {
+        sub,
+        planejadoM,
+        realizadoM,
+        saldoM: Math.max(planejadoM - realizadoM, 0),
+        percentual: planejadoM ? realizadoM / planejadoM : 0,
+        quantidadeFrentes: items.length,
+        frentesConcluidas: items.filter((item) => item.ext > 0 && item.extReal >= item.ext).length,
+        frentesAndamento: items.filter((item) => item.extReal > 0 && item.extReal < item.ext).length,
+        frentesPendentes: items.filter((item) => !item.extReal).length,
+        kmInicial: min(items.map((item) => item.kmi).filter(Number.isFinite)),
+        kmFinal: max(items.map((item) => item.kmf).filter(Number.isFinite)),
+        sbs: unique(items.map((item) => item.sb).filter(Boolean)),
+        atividades,
+      };
+    });
 }
 
 function limpezaRowsForSub(sub) {
@@ -949,6 +1182,23 @@ function riskClass(risk) {
   return "";
 }
 
+function statusToProgress(status) {
+  const normalized = normalizeHeader(status);
+  if (normalized.includes("CONCLUI")) return 1;
+  if (normalized.includes("ANDAMENTO")) return 0.5;
+  return 0;
+}
+
+function normalizeHeader(value) {
+  return String(value || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^A-Z0-9]+/gi, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .toUpperCase();
+}
+
 function showStatus(message) {
   const el = document.getElementById("statusMessage");
   el.textContent = message;
@@ -959,6 +1209,55 @@ function hideStatus() {
   const el = document.getElementById("statusMessage");
   el.textContent = "";
   el.classList.remove("show");
+}
+
+function setDatabaseStatus(message) {
+  const el = document.getElementById("databaseStatus");
+  if (el) el.textContent = message;
+}
+
+function getValue(id) {
+  return String(document.getElementById(id).value || "").trim();
+}
+
+function setValue(id, value) {
+  document.getElementById(id).value = value ?? "";
+}
+
+function getNumberInput(id) {
+  const value = getValue(id);
+  if (value === "") return null;
+  const number = Number(value);
+  return Number.isFinite(number) ? number : null;
+}
+
+function getIntegerInput(id) {
+  const value = getNumberInput(id);
+  return value === null ? null : Math.round(value);
+}
+
+function nullableInteger(value) {
+  if (value === null || value === undefined || value === "") return null;
+  const number = Number(value);
+  return Number.isFinite(number) ? Math.round(number) : null;
+}
+
+function nullableNumber(value) {
+  if (value === null || value === undefined || value === "") return null;
+  const number = Number(value);
+  return Number.isFinite(number) ? number : null;
+}
+
+function shortId(value) {
+  const text = String(value || "");
+  return text.length > 10 ? `${text.slice(0, 8)}…` : text;
+}
+
+function formatDateTime(value) {
+  if (!value) return "—";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return String(value);
+  return date.toLocaleString("pt-BR");
 }
 
 function escapeHtml(value) {

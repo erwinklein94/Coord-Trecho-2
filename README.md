@@ -1,66 +1,78 @@
-# Trecho 2 — Dashboard PDM Infraestrutura
+# Trecho 2 — Dashboard PDM Infraestrutura com Supabase
 
-Site estático pronto para **GitHub Pages**, agora configurado como **dashboard local** para proteger os dados da planilha PDM.
+Site estático pronto para GitHub Pages, agora integrado ao **Supabase** para banco de dados, autenticação, perfis de acesso e auditoria.
 
-## Como funciona
+## O que mudou
 
-1. Abra o site.
-2. O dashboard inicia **zerado**, sem dados de exemplo preenchidos.
-3. Vá em **Fonte de dados**.
-4. Clique em **Importar planilha**.
-5. Selecione a planilha PDM atualizada em formato `.xlsx` ou `.xlsm`.
-6. O dashboard será gerado no próprio navegador.
+- A importação local de Excel foi removida do site.
+- A planilha `1. UNIFILAR T2 DR (1).xlsx` foi convertida para carga inicial no arquivo `supabase/schema-and-seed.sql`.
+- Os dados são lidos das tabelas `public.limpeza` e `public.obras` no Supabase.
+- A manutenção dos dados é feita pela aba **Gestão**, conforme o perfil do usuário.
+- A aba **Auditoria** fica disponível somente para o perfil **Coordenação** e também permite ajustar o perfil dos usuários.
 
-A planilha **não precisa ser publicada online** e não fica armazenada no GitHub.
+## Perfis de acesso
 
-## Abas esperadas na planilha
+| Perfil | Visualiza | Adiciona | Edita | Exclui | Auditoria |
+|---|---:|---:|---:|---:|---:|
+| Coordenação | Sim | Sim | Sim | Sim | Sim |
+| Analista | Sim | Sim | Sim | Sim | Não |
+| Fiscalização | Sim | Não | Não | Não | Não |
 
-O sistema procura estas abas:
+## Como configurar no Supabase
 
-- `ZBV-ZAR PDM Limpeza DR` ou `ZBV-ZAR PDM Limpeza`
-- `ZBV-ZAR Obras DR` ou `ZBV-ZAR Obras`
+1. Abra o projeto Supabase.
+2. Vá em **SQL Editor**.
+3. Cole e execute todo o conteúdo do arquivo:
 
-A estrutura das colunas deve seguir a planilha usada como modelo neste projeto.
+```text
+supabase/schema-and-seed.sql
+```
 
-## Dashboards incluídos
+Esse script cria:
 
-- **Visão geral**
-- **Limpeza Geral**
-  - Cards por SUB
-  - Percentual por SUB
-  - Planejado, executado e saldo
-  - Detalhes dos equipamentos
-- **Obras**
-  - Cards por obra
-  - SUB, KM, status, risco matriz, tipo, equipamento, extensão, motivo e observação
-- **Fonte de dados**
-  - Importação local da planilha PDM
+- `public.profiles`
+- `public.limpeza`
+- `public.obras`
+- `public.audit_logs`
+- funções de perfil/permissão
+- políticas RLS
+- gatilhos de auditoria
+- carga inicial com 133 registros de limpeza e 15 obras da planilha anexada
 
-## Segurança dos dados
+4. No Supabase, vá em **Project Settings > API** e copie a chave **anon/public**.
+5. Abra `script.js` e substitua:
 
-Este modelo evita publicar a planilha real em serviços externos. O arquivo Excel é lido localmente no navegador da pessoa que está usando o site.
+```js
+anonKey: "COLE_AQUI_A_SUPABASE_ANON_KEY"
+```
 
-Pontos importantes:
+pela chave anon/public do projeto.
 
-- Não coloque a planilha real dentro do repositório do GitHub.
-- Não publique CSV, JSON ou PDF com dados sigilosos no GitHub Pages.
-- Os arquivos `data/pdm-limpeza.json` e `data/obras-dr.json` ficam vazios por padrão.
-- Para visualizar dados reais, importe a planilha localmente pela aba **Fonte de dados**.
+> A URL do projeto já está configurada como `https://nvfewxgtjenyawxyroqk.supabase.co`.
 
-## Compatibilidade
+## Primeiro acesso de Coordenação
 
-A leitura local de Excel usa recursos modernos do navegador. Recomenda-se usar **Google Chrome** ou **Microsoft Edge** atualizados.
+Depois que o primeiro usuário criar acesso ou entrar no site, promova esse usuário para Coordenação no **SQL Editor**:
 
-## Como publicar no GitHub Pages
+```sql
+update public.profiles
+set role = 'coordenacao'
+where email = 'SEU_EMAIL_CORPORATIVO@empresa.com';
+```
 
-1. Crie um repositório no GitHub.
-2. Envie todos os arquivos deste pacote para a raiz do repositório.
-3. Vá em **Settings > Pages**.
-4. Em **Build and deployment**, selecione:
-   - Source: `Deploy from a branch`
-   - Branch: `main`
-   - Folder: `/root`
-5. Salve e aguarde o link do GitHub Pages.
+A partir daí, esse perfil poderá acessar a auditoria, administrar dados e alterar perfis dos demais usuários pela aba **Auditoria**.
+
+## Como usar
+
+1. Publique o site no GitHub Pages ou abra localmente em um servidor estático.
+2. Entre com e-mail e senha.
+3. Use as abas:
+   - **Visão geral** para KPIs.
+   - **Limpeza Geral** para consulta e edição por equipamento, se permitido.
+   - **Obras** para consulta e edição por obra, se permitido.
+   - **Gestão** para adicionar/editar/excluir dados, disponível para Coordenação e Analista.
+   - **Auditoria** para Coordenação ver quem alterou dados e gerenciar perfis de usuários.
+   - **Banco de dados** para status e matriz de permissões.
 
 ## Arquivos principais
 
@@ -68,9 +80,15 @@ A leitura local de Excel usa recursos modernos do navegador. Recomenda-se usar *
 index.html
 styles.css
 script.js
-data/pdm-limpeza.json
-data/obras-dr.json
-data/source-config.json
+supabase/schema-and-seed.sql
+tools/generate_supabase_seed.py
+data/seed-preview.json
 ```
 
-Gerado para o fluxo de dashboard local com tela inicial zerada.
+## Observações importantes
+
+- O frontend usa a chave `anon/public`, que pode ficar no navegador. A proteção real está nas políticas RLS do Supabase.
+- O usuário de Fiscalização consegue apenas consultar dados.
+- O usuário de Analista consegue manter dados, mas não vê auditoria.
+- O usuário de Coordenação consegue manter dados e visualizar auditoria.
+- Se quiser que Analista não possa adicionar registros, altere a política `can_write_pdm()` e esconda os botões de criação na aba Gestão.

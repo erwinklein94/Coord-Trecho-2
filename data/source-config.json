@@ -1,4 +1,10 @@
 {
-  "modo": "dashboard-local",
-  "observacao": "O dashboard inicia zerado. Os dados reais aparecem apenas quando o usuário importa uma planilha PDM local no navegador."
+  "modo": "supabase",
+  "apiUrl": "https://nvfewxgtjenyawxyroqk.supabase.co/rest/v1/",
+  "observacao": "A importação de Excel foi removida. Os dados devem ser cadastrados, editados ou excluídos por usuários autenticados, conforme perfil e políticas RLS do Supabase.",
+  "perfis": {
+    "coordenacao": "CRUD completo e auditoria",
+    "analista": "CRUD completo sem auditoria",
+    "fiscalizacao": "somente leitura"
+  }
 }

@@ -4,8 +4,8 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Trecho 2 | Dashboard PDM Infraestrutura</title>
-  <meta name="description" content="Dashboard PDM Trecho 2 para acompanhamento de limpeza de lastro e obras de infraestrutura ferroviária." />
-  <link rel="stylesheet" href="styles.css?v=rumo-20260607" />
+  <meta name="description" content="Dashboard PDM Trecho 2 com Supabase, perfis de acesso, CRUD e auditoria." />
+  <link rel="stylesheet" href="styles.css?v=supabase-20260607" />
 </head>
 <body>
   <header class="site-header">
@@ -19,13 +19,20 @@
       <button class="tab active" type="button" data-panel="overview">Visão geral</button>
       <button class="tab" type="button" data-panel="limpeza">Limpeza Geral</button>
       <button class="tab" type="button" data-panel="obras">Obras</button>
-      <button class="tab" type="button" data-panel="dados">Fonte de dados</button>
+      <button class="tab" type="button" data-panel="gestao" data-requires-write>Gestão</button>
+      <button class="tab" type="button" data-panel="auditoria" data-requires-coordenacao>Auditoria</button>
+      <button class="tab" type="button" data-panel="dados">Banco de dados</button>
     </nav>
 
     <div class="header-actions">
       <div class="update-pill" title="Data da última atualização carregada">
         <span>Atualizado</span>
         <strong id="lastUpdateLabel">—</strong>
+      </div>
+
+      <div class="update-pill session-pill" title="Usuário autenticado">
+        <span>Perfil</span>
+        <strong id="userRoleLabel">—</strong>
       </div>
 
       <button class="theme-toggle" id="themeToggle" type="button" aria-label="Alternar entre tema claro e escuro">
@@ -36,8 +43,33 @@
   </header>
 
   <main>
-
     <section class="status-message" id="statusMessage" role="status" aria-live="polite"></section>
+
+    <section class="surface-card auth-card" id="authPanel">
+      <div>
+        <span class="eyebrow">Acesso com Supabase</span>
+        <h2>Entre para visualizar ou gerenciar o PDM</h2>
+        <p class="muted">
+          Os dados agora vêm do banco Supabase. Fiscalização só visualiza; Analista pode manter os dados; Coordenação mantém dados e acessa auditoria.
+        </p>
+      </div>
+
+      <form class="auth-form" id="authForm">
+        <label>
+          E-mail
+          <input id="authEmail" type="email" autocomplete="email" placeholder="seu.email@empresa.com" required />
+        </label>
+        <label>
+          Senha
+          <input id="authPassword" type="password" autocomplete="current-password" placeholder="Senha" required />
+        </label>
+        <div class="source-actions">
+          <button class="primary-btn" id="signInBtn" type="submit">Entrar</button>
+          <button class="ghost-btn" id="signUpBtn" type="button">Criar acesso</button>
+          <button class="ghost-btn hidden" id="signOutBtn" type="button">Sair</button>
+        </div>
+      </form>
+    </section>
 
     <section class="panel active" id="panel-overview">
       <div class="section-heading">
@@ -132,45 +164,153 @@
       <div class="cards-grid obras-grid" id="obrasCards"></div>
     </section>
 
+    <section class="panel" id="panel-gestao">
+      <div class="section-heading">
+        <div>
+          <span class="eyebrow">Manutenção de dados</span>
+          <h2>Adicionar, editar e excluir registros</h2>
+          <p class="muted">A importação de Excel foi removida. A manutenção agora é feita exclusivamente pelo usuário autenticado no site.</p>
+        </div>
+      </div>
+
+      <div class="split-grid management-grid">
+        <article class="surface-card">
+          <div class="card-head">
+            <div>
+              <span class="eyebrow">Limpeza Geral</span>
+              <h3 id="limpezaFormTitle">Novo registro</h3>
+            </div>
+            <button class="ghost-btn" id="cancelLimpezaEditBtn" type="button">Limpar formulário</button>
+          </div>
+
+          <form class="record-form" id="limpezaForm">
+            <input type="hidden" id="limpezaId" />
+            <label>Equipamento infra<input id="limpezaEquipInfra" required placeholder="63/017081-017544ct" /></label>
+            <label>Atividade<input id="limpezaAtividade" placeholder="ct, at, sm..." /></label>
+            <label>SUB<input id="limpezaSub" placeholder="63" /></label>
+            <label>SB<input id="limpezaSb" placeholder="ZJY ZVN" /></label>
+            <label>KMI<input id="limpezaKmi" type="number" step="1" /></label>
+            <label>KMF<input id="limpezaKmf" type="number" step="1" /></label>
+            <label>KMI real<input id="limpezaKmiReal" type="number" step="1" /></label>
+            <label>KMF real<input id="limpezaKmfReal" type="number" step="1" /></label>
+            <label>EXT planejada (m)<input id="limpezaExt" type="number" step="0.01" min="0" required /></label>
+            <label>EXT realizada (m)<input id="limpezaExtReal" type="number" step="0.01" min="0" /></label>
+            <button class="primary-btn form-full" type="submit">Salvar limpeza</button>
+          </form>
+        </article>
+
+        <article class="surface-card">
+          <div class="card-head">
+            <div>
+              <span class="eyebrow">Obras</span>
+              <h3 id="obraFormTitle">Nova obra</h3>
+            </div>
+            <button class="ghost-btn" id="cancelObraEditBtn" type="button">Limpar formulário</button>
+          </div>
+
+          <form class="record-form" id="obraForm">
+            <input type="hidden" id="obraId" />
+            <label>SUB<input id="obraSub" placeholder="70" /></label>
+            <label>SB<input id="obraSb" placeholder="ZRC - ZIC" /></label>
+            <label>KM<input id="obraKm" type="number" step="1" /></label>
+            <label class="form-full">Descrição da obra<input id="obraDescricao" required placeholder="Drenagem superficial..." /></label>
+            <label>Tipo de obra<input id="obraTipo" placeholder="Drenagem" /></label>
+            <label>Risco<input id="obraRisco" placeholder="Baixo, Moderado, Alto" /></label>
+            <label class="form-full">Motivo<input id="obraMotivo" placeholder="Plataforma instável" /></label>
+            <label class="form-full">Equipamento<input id="obraEquipamento" placeholder="70/096959-098934ct" /></label>
+            <label>Extensão EQ. (m)<input id="obraExtEq" type="number" step="0.01" min="0" /></label>
+            <label>Prazo (mês)<input id="obraPrazoMes" type="number" step="0.1" min="0" /></label>
+            <label>Data início<input id="obraDtInicio" type="date" /></label>
+            <label>Status
+              <select id="obraStatus">
+                <option value="NÃO INICIADO">NÃO INICIADO</option>
+                <option value="EM ANDAMENTO">EM ANDAMENTO</option>
+                <option value="CONCLUÍDO">CONCLUÍDO</option>
+              </select>
+            </label>
+            <label class="form-full">Observação<input id="obraObs" placeholder="Observação opcional" /></label>
+            <button class="primary-btn form-full" type="submit">Salvar obra</button>
+          </form>
+        </article>
+      </div>
+
+      <div class="split-grid management-grid">
+        <article class="surface-card">
+          <h3>Registros de limpeza</h3>
+          <div class="table-wrap"><table id="limpezaManageTable"></table></div>
+        </article>
+        <article class="surface-card">
+          <h3>Registros de obras</h3>
+          <div class="table-wrap"><table id="obrasManageTable"></table></div>
+        </article>
+      </div>
+    </section>
+
+    <section class="panel" id="panel-auditoria">
+      <div class="section-heading">
+        <div>
+          <span class="eyebrow">Coordenação</span>
+          <h2>Auditoria de alterações</h2>
+          <p class="muted">Registro de inserções, edições e exclusões feitas nas tabelas de limpeza e obras.</p>
+        </div>
+        <button class="ghost-btn" id="refreshAuditBtn" type="button">Atualizar auditoria</button>
+      </div>
+
+      <div class="split-grid management-grid">
+        <article class="surface-card">
+          <div class="card-head">
+            <div>
+              <span class="eyebrow">Acessos</span>
+              <h3>Perfis de usuários</h3>
+            </div>
+            <button class="ghost-btn" id="refreshProfilesBtn" type="button">Atualizar usuários</button>
+          </div>
+          <div class="table-wrap"><table id="profilesTable"></table></div>
+        </article>
+
+        <article class="surface-card">
+          <div class="card-head">
+            <div>
+              <span class="eyebrow">Logs</span>
+              <h3>Últimas alterações</h3>
+            </div>
+          </div>
+          <div class="table-wrap"><table id="auditTable"></table></div>
+        </article>
+      </div>
+    </section>
+
     <section class="panel" id="panel-dados">
       <div class="section-heading">
         <div>
-          <span class="eyebrow">Dashboard local</span>
-          <h2>Fonte de dados: importar planilha PDM</h2>
+          <span class="eyebrow">Fonte de dados</span>
+          <h2>Banco Supabase</h2>
           <p>
-            Importe a planilha PDM atualizada diretamente do computador. O dashboard lê as abas da planilha no próprio navegador,
-            sem publicar arquivo, sem link online e sem enviar dados para servidor.
+            O dashboard não aceita mais importação de Excel. A planilha anexada foi convertida para uma carga inicial em SQL, e o site lê e grava nas tabelas do Supabase.
           </p>
         </div>
       </div>
 
       <div class="surface-card data-card">
-        <h3>Importar planilha local</h3>
-        <p class="muted">
-          Use a mesma estrutura da planilha atual, com as abas <strong>ZBV-ZAR PDM Limpeza DR</strong> e
-          <strong>ZBV-ZAR Obras DR</strong>. O sistema também aceita os nomes sem “DR”.
-        </p>
-
-        <div class="source-form">
-          <label>
-            Planilha PDM atualizada (.xlsx ou .xlsm)
-            <input id="pdmFileInput" type="file" accept=".xlsx,.xlsm" />
-          </label>
-
-          <div class="source-actions">
-            <button class="primary-btn" id="importWorkbookBtn" type="button">Importar planilha</button>
-            <button class="ghost-btn" id="clearDataBtn" type="button">Limpar dados carregados</button>
-          </div>
-        </div>
-
-        <div class="loaded-file" id="loadedFileInfo">Nenhuma planilha local carregada. Dashboard zerado.</div>
+        <h3>Status da conexão</h3>
+        <p class="muted" id="databaseStatus">Verificando conexão...</p>
 
         <div class="hint-box">
-          <strong>Fluxo recomendado</strong>
-          <p>
-            A planilha real continua protegida no ambiente corporativo. Quando precisar consultar o dashboard, baixe uma cópia autorizada,
-            abra o site e importe o arquivo localmente. Nada precisa ser hospedado no GitHub além do código do site.
-          </p>
+          <strong>Perfis configurados</strong>
+          <p><strong>Coordenação:</strong> adiciona, edita, exclui e acessa auditoria. <strong>Analista:</strong> adiciona, edita e exclui dados. <strong>Fiscalização:</strong> apenas visualiza.</p>
+        </div>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>Perfil</th><th>Visualiza</th><th>Adiciona</th><th>Edita</th><th>Exclui</th><th>Auditoria</th></tr>
+            </thead>
+            <tbody>
+              <tr><td>Coordenação</td><td>Sim</td><td>Sim</td><td>Sim</td><td>Sim</td><td>Sim</td></tr>
+              <tr><td>Analista</td><td>Sim</td><td>Sim</td><td>Sim</td><td>Sim</td><td>Não</td></tr>
+              <tr><td>Fiscalização</td><td>Sim</td><td>Não</td><td>Não</td><td>Não</td><td>Não</td></tr>
+            </tbody>
+          </table>
         </div>
       </div>
     </section>
@@ -183,6 +323,7 @@
     <p>Trecho 2 • Infraestrutura ferroviária • Dashboard PDM</p>
   </footer>
 
-  <script src="script.js?v=rumo-20260607"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="script.js?v=supabase-20260607"></script>
 </body>
 </html>
