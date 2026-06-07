@@ -1,44 +1,66 @@
 :root {
   color-scheme: light;
-  --bg: #f5f9fb;
-  --bg-soft: #eaf5f4;
+
+  /* ---- Identidade Rumo — paleta institucional (brand book oficial) ---- */
+  --rumo-azul:         #003865;  /* cor âncora */
+  --rumo-azul-claro:   #32A6E6;
+  --rumo-verde:        #1E9F7F;
+  --rumo-verde-claro:  #7FE06C;
+  --rumo-azul-profundo:#002B4D;
+  --rumo-azul-noite:   #001E36;
+  /* secundária — uso pontual */
+  --rumo-amarelo:      #FBD300;
+  --rumo-laranja:      #F78344;
+  /* cinzas de interface */
+  --rumo-cinza-50:     #F2F5F6;
+  --rumo-cinza-100:    #E5EBEE;
+  --rumo-cinza-200:    #D7E0E5;
+  --rumo-texto:        #4D626F;
+  /* tipografia — Cera Pro p/ quem tiver licença; Verdana é o fallback oficial */
+  --rumo-fonte: "Cera Pro", Verdana, Geneva, Tahoma, sans-serif;
+
+  /* ---- Aliases: o site já usava estas variáveis; agora apontam para a marca ---- */
+  --bg: var(--rumo-cinza-50);
+  --bg-soft: var(--rumo-cinza-100);
   --surface: #ffffff;
-  --surface-2: #f1f7f8;
-  --navy: #003b63;
-  --navy-2: #084f7b;
-  --blue: #12a9d2;
-  --green: #18d85a;
-  --green-soft: #dff9e8;
-  --yellow: #ffdc12;
-  --yellow-soft: #fff6b8;
-  --text: #0c2f46;
-  --muted: #637989;
-  --border: #d6e4ea;
-  --danger: #c0392b;
+  --surface-2: var(--rumo-cinza-50);
+  --navy: var(--rumo-azul);
+  --navy-2: var(--rumo-azul);
+  --blue: var(--rumo-azul-claro);
+  --green: var(--rumo-verde);
+  --green-soft: color-mix(in srgb, var(--rumo-verde-claro) 30%, #ffffff);
+  --yellow: var(--rumo-amarelo);
+  --yellow-soft: color-mix(in srgb, var(--rumo-amarelo) 24%, #ffffff);
+  --text: var(--rumo-azul-noite);
+  --muted: var(--rumo-texto);
+  --border: var(--rumo-cinza-200);
+  --danger: #D84545;
   --warning: #b58200;
-  --shadow: 0 18px 50px rgba(0, 59, 99, 0.12);
-  --radius: 22px;
+  --shadow: 0 4px 18px rgba(0, 56, 101, 0.08);
+  --shadow-hover: 0 10px 30px rgba(0, 56, 101, 0.16);
+  --radius: 14px;
 }
 
 body.dark {
   color-scheme: dark;
-  --bg: #002f50;
-  --bg-soft: #003b63;
-  --surface: #063f66;
-  --surface-2: #0a4b76;
+  --bg: var(--rumo-azul-noite);
+  --bg-soft: var(--rumo-azul-profundo);
+  --surface: var(--rumo-azul-profundo);
+  --surface-2: #073355;
   --navy: #ffffff;
-  --navy-2: #d5eef8;
-  --blue: #18b3dd;
-  --green: #22df69;
-  --green-soft: rgba(34, 223, 105, 0.15);
-  --yellow: #ffdc12;
-  --yellow-soft: rgba(255, 220, 18, 0.17);
-  --text: #f7fbff;
-  --muted: #bed2dd;
-  --border: rgba(255, 255, 255, 0.14);
+  --navy-2: var(--rumo-azul-claro);
+  --blue: var(--rumo-azul-claro);
+  --green: var(--rumo-verde-claro);
+  --green-soft: rgba(127, 224, 108, 0.16);
+  --yellow: var(--rumo-amarelo);
+  --yellow-soft: rgba(251, 211, 0, 0.17);
+  --text: #f4f8fb;
+  --muted: var(--rumo-cinza-200);
+  --border: rgba(189, 204, 212, 0.18);
   --danger: #ff8a80;
   --warning: #ffe27a;
-  --shadow: 0 18px 50px rgba(0, 0, 0, 0.28);
+  --shadow: 0 4px 18px rgba(0, 0, 0, 0.30);
+  --shadow-hover: 0 10px 30px rgba(0, 0, 0, 0.40);
 }
 
 * {
@@ -52,7 +74,7 @@ html {
 body {
   margin: 0;
   min-height: 100vh;
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--rumo-fonte);
   background:
     radial-gradient(circle at 85% 0%, var(--bg-soft) 0, transparent 360px),
     linear-gradient(180deg, var(--bg) 0%, var(--surface) 100%);
@@ -90,31 +112,30 @@ button {
   min-width: 0;
 }
 
-.brand-mark {
-  width: 44px;
-  height: 44px;
-  border-radius: 14px;
-  display: grid;
-  place-items: center;
-  color: #ffffff;
-  background: var(--navy-2);
-  font-size: 30px;
-  font-weight: 900;
-  line-height: 1;
-  box-shadow: inset -10px -10px 0 rgba(18, 169, 210, 0.28);
+.brand-logo {
+  display: block;
+  height: 34px;          /* ratio 4.26 → ~145px de largura, acima do mínimo de 70px */
+  width: auto;
+  /* área de segurança: respiro ao redor do logo (≈ altura da letra "O") */
+  margin: 4px 8px;
 }
 
-.brand-name {
+.brand-logo-branco {
+  display: none;
+}
+
+body.dark .brand-logo-azul {
+  display: none;
+}
+
+body.dark .brand-logo-branco {
   display: block;
-  font-size: 30px;
-  letter-spacing: 0.04em;
-  line-height: 0.9;
-  color: var(--navy);
 }
 
 .brand-subtitle {
   display: block;
-  margin-top: 4px;
+  padding-left: 12px;
+  border-left: 1px solid var(--border);
   font-size: 12px;
   color: var(--muted);
 }
@@ -322,11 +343,11 @@ h3 {
 
 .tab.active {
   color: #ffffff;
-  background: #084f7b;
+  background: var(--rumo-azul);
 }
 
 body.dark .tab.active {
-  background: #0b5a86;
+  background: var(--rumo-azul-profundo);
 }
 
 .status-message {
@@ -853,8 +874,8 @@ th {
     display: none;
   }
 
-  .brand-name {
-    font-size: 24px;
+  .brand-logo {
+    height: 28px;
   }
 
   .brand-subtitle {
