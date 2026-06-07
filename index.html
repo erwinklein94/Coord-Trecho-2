@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Trecho 2 | Dashboard PDM Infraestrutura</title>
   <meta name="description" content="Dashboard PDM Trecho 2 com Supabase, perfis de acesso, CRUD e auditoria." />
-  <link rel="stylesheet" href="styles.css?v=supabase-20260607" />
+  <link rel="stylesheet" href="styles.css?v=supabase-20260607-login" />
 </head>
 <body>
   <header class="site-header">
@@ -50,7 +50,7 @@
         <span class="eyebrow">Acesso com Supabase</span>
         <h2>Entre para visualizar ou gerenciar o PDM</h2>
         <p class="muted">
-          Os dados agora vêm do banco Supabase. Fiscalização só visualiza; Analista pode manter os dados; Coordenação mantém dados e acessa auditoria.
+          Os dados agora vêm do banco Supabase. Para o primeiro acesso, preencha e-mail e senha e clique em <strong>Criar acesso</strong>. Depois confirme o e-mail, se o Supabase solicitar, e então use <strong>Entrar</strong>.
         </p>
       </div>
 
@@ -65,7 +65,7 @@
         </label>
         <div class="source-actions">
           <button class="primary-btn" id="signInBtn" type="submit">Entrar</button>
-          <button class="ghost-btn" id="signUpBtn" type="button">Criar acesso</button>
+          <button class="ghost-btn" id="signUpBtn" type="button">Criar acesso / primeiro acesso</button>
           <button class="ghost-btn hidden" id="signOutBtn" type="button">Sair</button>
         </div>
       </form>
@@ -324,6 +324,6 @@
   </footer>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="script.js?v=supabase-20260607"></script>
+  <script src="script.js?v=supabase-20260607-login"></script>
 </body>
 </html>

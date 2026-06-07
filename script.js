@@ -1,4 +1,4 @@
-const APP_VERSION = "2026.06.07-supabase";
+const APP_VERSION = "2026.06.07-supabase-login-ajustado";
 
 const SUPABASE_CONFIG = {
   // A URL recebida foi a REST API. O supabase-js usa a URL base do projeto.
@@ -209,7 +209,7 @@ async function signIn() {
 
   showStatus("Entrando no Supabase...");
   const { error } = await state.supabase.auth.signInWithPassword({ email, password });
-  if (error) return showStatus(`Não foi possível entrar: ${error.message}`);
+  if (error) return showStatus(formatAuthError(error, "signin"));
   showStatus("Login realizado com sucesso.");
   setTimeout(hideStatus, 2500);
 }
@@ -220,16 +220,50 @@ async function signUp() {
   const email = document.getElementById("authEmail").value.trim();
   const password = document.getElementById("authPassword").value;
   if (!email || !password) return showStatus("Informe e-mail e senha para criar o acesso.");
+  if (password.length < 6) return showStatus("A senha precisa ter pelo menos 6 caracteres.");
 
-  showStatus("Criando acesso no Supabase...");
-  const { error } = await state.supabase.auth.signUp({
+  showStatus("Criando primeiro acesso no Supabase...");
+  const { data, error } = await state.supabase.auth.signUp({
     email,
     password,
     options: { data: { nome: email } },
   });
 
-  if (error) return showStatus(`Não foi possível criar acesso: ${error.message}`);
-  showStatus("Acesso criado. Se a confirmação por e-mail estiver ativa no Supabase, confirme o e-mail antes de entrar.");
+  if (error) return showStatus(formatAuthError(error, "signup"));
+
+  if (data?.session) {
+    showStatus("Acesso criado e login realizado. Agora rode o SQL de promoção para tornar seu usuário Coordenação.");
+    return;
+  }
+
+  showStatus("Acesso criado. O Supabase exigiu confirmação por e-mail: abra o e-mail recebido, confirme o cadastro e depois clique em Entrar.");
+}
+
+function formatAuthError(error, context) {
+  const message = error?.message || "erro desconhecido";
+  const normalized = message.toLowerCase();
+
+  if (normalized.includes("invalid login credentials")) {
+    return "Não foi possível entrar: e-mail ou senha inválidos. No primeiro acesso, clique em Criar acesso antes de Entrar; se já criou, confirme o e-mail ou revise a senha.";
+  }
+
+  if (normalized.includes("email not confirmed") || normalized.includes("confirm")) {
+    return "O e-mail ainda não foi confirmado. Abra a mensagem enviada pelo Supabase, confirme o cadastro e tente Entrar novamente.";
+  }
+
+  if (normalized.includes("user already registered") || normalized.includes("already registered") || normalized.includes("already exists")) {
+    return "Esse e-mail já tem acesso criado. Use o botão Entrar; se não lembrar a senha, redefina pelo painel do Supabase Auth.";
+  }
+
+  if (normalized.includes("signup") && normalized.includes("disabled")) {
+    return "O cadastro público está desativado no Supabase. Ative o cadastro por e-mail em Authentication ou crie o usuário manualmente no painel do Supabase.";
+  }
+
+  if (normalized.includes("password") && normalized.includes("characters")) {
+    return "A senha precisa ter pelo menos 6 caracteres.";
+  }
+
+  return `${context === "signup" ? "Não foi possível criar acesso" : "Não foi possível entrar"}: ${message}`;
 }
 
 async function signOut() {

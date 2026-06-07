@@ -43,6 +43,29 @@ Esse script cria:
 
 > A URL do projeto já está configurada como `https://nvfewxgtjenyawxyroqk.supabase.co`.
 
+
+## Login inicial: passo a passo
+
+1. Antes de tentar entrar, rode `supabase/schema-and-seed.sql` no **SQL Editor**.
+2. No site, preencha e-mail e senha. A senha precisa ter pelo menos 6 caracteres.
+3. Clique em **Criar acesso / primeiro acesso**.
+4. Se o Supabase enviar confirmação por e-mail, confirme o cadastro no link recebido. Enquanto o e-mail não for confirmado, o botão **Entrar** pode retornar erro de credenciais ou e-mail não confirmado.
+5. Depois do cadastro confirmado, clique em **Entrar**.
+6. Promova o primeiro usuário para Coordenação no SQL Editor:
+
+```sql
+update public.profiles
+set role = 'coordenacao'
+where email = 'SEU_EMAIL_CORPORATIVO@empresa.com';
+```
+
+### Erros comuns no primeiro login
+
+- **Invalid login credentials**: o usuário ainda não foi criado, a senha está incorreta ou o e-mail ainda não foi confirmado. Use **Criar acesso / primeiro acesso** antes de **Entrar**.
+- **Email not confirmed**: confirme o cadastro no e-mail enviado pelo Supabase ou desative confirmação obrigatória no painel de Auth do Supabase.
+- **relation public.profiles does not exist**: o arquivo `supabase/schema-and-seed.sql` ainda não foi executado.
+- **Signup disabled**: o cadastro público por e-mail está desativado no Supabase; ative no painel de Auth ou crie o usuário manualmente.
+
 ## Primeiro acesso de Coordenação
 
 Depois que o primeiro usuário criar acesso ou entrar no site, promova esse usuário para Coordenação no **SQL Editor**:
