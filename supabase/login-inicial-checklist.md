@@ -1,5 +1,26 @@
 # Checklist para resolver login inicial
 
+## Se o e-mail abre localhost:3000
+
+No Supabase, vá em **Authentication → URL Configuration** e configure:
+
+```text
+Site URL:
+https://erwinklein1994.github.io/Coord-Trecho-2/
+
+Redirect URLs / Additional Redirect URLs:
+https://erwinklein1994.github.io/Coord-Trecho-2/
+https://erwinklein1994.github.io/Coord-Trecho-2/**
+```
+
+Salve e gere um novo e-mail de confirmação. O e-mail antigo não muda.
+
+## Se aparece email rate limit exceeded
+
+O Supabase bloqueou novos e-mails temporariamente. Para continuar sem esperar, crie o usuário manualmente em **Authentication → Users** e marque a opção de confirmar/auto-confirmar o usuário, se estiver disponível. Depois use o SQL de promoção para Coordenação.
+
+## Passo a passo normal
+
 1. Rode `schema-and-seed.sql` no SQL Editor do Supabase.
 2. Abra o site, preencha e-mail e senha com pelo menos 6 caracteres.
 3. Clique em **Criar acesso / primeiro acesso**.

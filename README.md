@@ -43,6 +43,26 @@ Esse script cria:
 
 > A URL do projeto já está configurada como `https://nvfewxgtjenyawxyroqk.supabase.co`.
 
+## Configuração obrigatória do link de confirmação
+
+Se o e-mail de confirmação abrir `localhost:3000`, o problema está na configuração de Auth do Supabase, não no GitHub Pages.
+
+No Supabase, vá em **Authentication → URL Configuration** e configure:
+
+```text
+Site URL:
+https://erwinklein1994.github.io/Coord-Trecho-2/
+
+Redirect URLs / Additional Redirect URLs:
+https://erwinklein1994.github.io/Coord-Trecho-2/
+https://erwinklein1994.github.io/Coord-Trecho-2/**
+```
+
+Depois salve, publique este ZIP no GitHub Pages e gere um novo e-mail de confirmação. E-mails antigos continuarão apontando para o endereço antigo.
+
+O `script.js` também envia `emailRedirectTo` automaticamente para a URL onde o site estiver aberto, mantendo o caminho `/Coord-Trecho-2/` do GitHub Pages.
+
+
 
 ## Login inicial: passo a passo
 

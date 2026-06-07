@@ -1,4 +1,4 @@
-const APP_VERSION = "2026.06.07-supabase-login-ajustado";
+const APP_VERSION = "2026.06.07-supabase-redirect-github-pages";
 
 const SUPABASE_CONFIG = {
   // A URL recebida foi a REST API. O supabase-js usa a URL base do projeto.
@@ -8,6 +8,25 @@ const SUPABASE_CONFIG = {
   // Esta chave é pública por natureza; a segurança fica nas políticas RLS do arquivo supabase/schema-and-seed.sql.
   anonKey: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im52ZmV3eGd0amVueWF3eHlyb3FrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA4MDgyMDIsImV4cCI6MjA5NjM4NDIwMn0.w5vSwqUWrw5I-0qdOE24JOGyU_-k23GWX4M9kAPWTDE",
 };
+
+const DEPLOYED_SITE_URL = "https://erwinklein1994.github.io/Coord-Trecho-2/";
+
+function getAuthRedirectUrl() {
+  try {
+    const url = new URL(window.location.href);
+    url.hash = "";
+    url.search = "";
+
+    // Em GitHub Pages, mantém /Coord-Trecho-2/ em vez de cair na raiz do domínio.
+    if (!url.pathname.endsWith("/")) {
+      url.pathname = url.pathname.replace(/\/[^/]*$/, "/");
+    }
+
+    return url.toString();
+  } catch (_error) {
+    return DEPLOYED_SITE_URL;
+  }
+}
 
 const STORAGE_KEYS = {
   theme: "trecho2-pdm-theme",
@@ -222,11 +241,15 @@ async function signUp() {
   if (!email || !password) return showStatus("Informe e-mail e senha para criar o acesso.");
   if (password.length < 6) return showStatus("A senha precisa ter pelo menos 6 caracteres.");
 
-  showStatus("Criando primeiro acesso no Supabase...");
+  const redirectTo = getAuthRedirectUrl();
+  showStatus(`Criando primeiro acesso no Supabase. O link de confirmação voltará para ${redirectTo}`);
   const { data, error } = await state.supabase.auth.signUp({
     email,
     password,
-    options: { data: { nome: email } },
+    options: {
+      data: { nome: email },
+      emailRedirectTo: redirectTo,
+    },
   });
 
   if (error) return showStatus(formatAuthError(error, "signup"));
@@ -236,12 +259,16 @@ async function signUp() {
     return;
   }
 
-  showStatus("Acesso criado. O Supabase exigiu confirmação por e-mail: abra o e-mail recebido, confirme o cadastro e depois clique em Entrar.");
+  showStatus(`Acesso criado. Abra o e-mail recebido e confirme o cadastro. O link precisa abrir este endereço: ${getAuthRedirectUrl()}`);
 }
 
 function formatAuthError(error, context) {
   const message = error?.message || "erro desconhecido";
   const normalized = message.toLowerCase();
+
+  if (normalized.includes("email rate limit") || (normalized.includes("rate limit") && normalized.includes("email"))) {
+    return "O Supabase bloqueou temporariamente novos e-mails de confirmação: email rate limit exceeded. Aguarde cerca de 1 hora, crie o usuário manualmente no painel Auth ou configure SMTP próprio no Supabase.";
+  }
 
   if (normalized.includes("invalid login credentials")) {
     return "Não foi possível entrar: e-mail ou senha inválidos. No primeiro acesso, clique em Criar acesso antes de Entrar; se já criou, confirme o e-mail ou revise a senha.";
